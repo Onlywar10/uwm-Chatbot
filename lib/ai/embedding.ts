@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { embeddings } from "@/lib/db/schema/embeddings";
 import { embed, embedMany } from "ai";
-import { and, cosineDistance, desc, eq, gt, sql } from "drizzle-orm";
+import { and, cosineDistance, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 const embeddingModel = "text-embedding-3-small";
 
@@ -114,6 +114,7 @@ export async function generateEmbedding(value: string): Promise<number[]> {
 async function findRelevantContentBase(params: {
 	userQuery: string;
 	domain?: string;
+	domains?: string[];
 	threshold?: number;
 	limit?: number;
 }) {
@@ -124,9 +125,14 @@ async function findRelevantContentBase(params: {
 
 	const similarity = sql<number>`1 - (${cosineDistance(embeddings.embedding, userQueryEmbedded)})`;
 
-	const whereClause = params.domain
-		? and(eq(embeddings.domain, params.domain), gt(similarity, threshold))
-		: gt(similarity, threshold);
+	let whereClause;
+	if (params.domains && params.domains.length > 0) {
+		whereClause = and(inArray(embeddings.domain, params.domains), gt(similarity, threshold));
+	} else if (params.domain) {
+		whereClause = and(eq(embeddings.domain, params.domain), gt(similarity, threshold));
+	} else {
+		whereClause = gt(similarity, threshold);
+	}
 
 	return db
 		.select({ name: embeddings.content, similarity })
@@ -142,4 +148,8 @@ export async function findRelevantContent(userQuery: string) {
 
 export async function findRelevantContentForDomain(domain: string, userQuery: string) {
 	return findRelevantContentBase({ domain, userQuery });
+}
+
+export async function findRelevantContentForDomains(domains: string[], userQuery: string) {
+	return findRelevantContentBase({ domains, userQuery });
 }
