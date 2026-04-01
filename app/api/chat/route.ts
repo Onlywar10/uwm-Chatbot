@@ -77,9 +77,23 @@ const retrievalQueriesSchema = z.object({
 		.describe("Up to 3 short search-style retrieval queries."),
 });
 
+const MAX_MESSAGES = 20;
+const MAX_MESSAGE_LENGTH = 2000;
+
 export async function POST(req: Request) {
 	const startTotal = performance.now();
 	const { messages, widgetId }: { messages: UIMessage[]; widgetId?: string } = await req.json();
+
+	if (!Array.isArray(messages) || messages.length === 0) {
+		return new Response("Invalid messages", { status: 400 });
+	}
+
+	const trimmedMessages = messages.slice(-MAX_MESSAGES);
+
+	const lastUserText = getLastUserText(trimmedMessages);
+	if (lastUserText.length > MAX_MESSAGE_LENGTH) {
+		return new Response("Message too long", { status: 400 });
+	}
 
 	let domain: string;
 	let widgetDomains: string[] | null = null;
@@ -95,9 +109,9 @@ export async function POST(req: Request) {
 		domain = getDomainFromRequest(req) ?? "unknown";
 	}
 
-	const userText = getLastUserText(messages);
+	const userText = lastUserText;
 
-	const modelMessages = await convertToModelMessages(messages);
+	const modelMessages = await convertToModelMessages(trimmedMessages);
 
 	const startQueryGen = performance.now();
 	const queryGen = await generateText({

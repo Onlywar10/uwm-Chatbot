@@ -13,7 +13,8 @@ function isPublicPath(pathname: string) {
 		pathname.startsWith("/images/") ||
 		pathname.startsWith("/login") ||
 		pathname.startsWith("/api/chat") ||
-		pathname.startsWith("/api/crawl")
+		pathname.startsWith("/api/crawl") ||
+		pathname.startsWith("/widget")
 	);
 }
 
