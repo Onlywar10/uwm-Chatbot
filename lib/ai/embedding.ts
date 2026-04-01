@@ -3,7 +3,7 @@ import { embeddings } from "@/lib/db/schema/embeddings";
 import { embed, embedMany } from "ai";
 import { and, cosineDistance, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
-const embeddingModel = "text-embedding-3-small";
+const embeddingModel = "openai/text-embedding-3-small";
 
 const DEFAULT_SIMILARITY_THRESHOLD = 0.3;
 const DEFAULT_LIMIT = 4;

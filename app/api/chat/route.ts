@@ -4,18 +4,12 @@ import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
 import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
-import {
-	convertToModelMessages,
-	generateText,
-	Output,
-	streamText,
-	type UIMessage,
-} from "ai";
+import { convertToModelMessages, generateText, Output, streamText, type UIMessage } from "ai";
 import { z } from "zod";
 
 export const maxDuration = 30;
 
-const chatModel = "gpt-4o-mini";
+const chatModel = "openai/gpt-4o-mini";
 const TOP_K = 4;
 
 type RetrievalHit = { name: string; similarity: number };
@@ -132,13 +126,11 @@ export async function POST(req: Request) {
 					)
 					.join("\n\n---\n\n");
 
-	const systemPrompt = `You are a helpful assistant answering questions about the website content.
+	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced.
 
     Rules:
-    - Use ONLY the Context below.
-    - If the Context does not contain the answer, respond exactly: "Sorry, I don't know."
-    - Do not guess. Do not use outside knowledge.
-
+    - Use the Context below to anwser a user's question to the best of your ability.
+	- If all Context is irrevelvent to the user's question respond with Sorry I dont Know
     Context:
     ${context || "(empty)"}
     `;
