@@ -26,7 +26,6 @@ function getTextFromMessage(message: UIMessage): string {
 
 export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 	const { messages, status, sendMessage } = useChat({
-		body: { widgetId: widget.id },
 		onError: () => {
 			toast.error("Something went wrong, please try again.");
 		},
@@ -48,7 +47,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		const text = input.trim();
 		if (!text) return;
 
-		sendMessage({ text });
+		sendMessage({ text }, { body: { widgetId: widget.id } });
 		setInput("");
 	};
 
