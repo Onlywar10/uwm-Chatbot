@@ -12,6 +12,28 @@ export const maxDuration = 30;
 const chatModel = "openai/gpt-4o-mini";
 const TOP_K = 4;
 
+const ALLOWED_ORIGINS = new Set([
+	"https://www.unitedwaymerced.org",
+	"https://www.211merced.org",
+]);
+
+function getCorsHeaders(req: Request): Record<string, string> {
+	const origin = req.headers.get("origin") ?? "";
+	// Allow same-origin (widget iframe) and known external origins
+	if (ALLOWED_ORIGINS.has(origin)) {
+		return {
+			"Access-Control-Allow-Origin": origin,
+			"Access-Control-Allow-Methods": "POST, OPTIONS",
+			"Access-Control-Allow-Headers": "Content-Type",
+		};
+	}
+	return {};
+}
+
+export async function OPTIONS(req: Request) {
+	return new Response(null, { status: 204, headers: getCorsHeaders(req) });
+}
+
 type RetrievalHit = { name: string; similarity: number };
 
 function getDomainFromRequest(req: Request): string | null {
