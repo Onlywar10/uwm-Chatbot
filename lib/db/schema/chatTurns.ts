@@ -29,11 +29,6 @@ export type PromptJson = {
 	userMessage: string;
 };
 
-export type TranslationJson = {
-	detectedLang: string;
-	wasTranslated: boolean;
-};
-
 export const chatTurns = pgTable(
 	"chat_turns",
 	{
@@ -60,8 +55,6 @@ export const chatTurns = pgTable(
 		prompt: jsonb("prompt").$type<PromptJson>().notNull(),
 
 		response: text("response").notNull(),
-
-		translation: jsonb("translation").$type<TranslationJson>(),
 	},
 	(t) => [
 		index("chat_turns_domain_idx").on(t.domain),

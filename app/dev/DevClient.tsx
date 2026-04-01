@@ -147,22 +147,6 @@ export function DevClient({ initialTurns }: { initialTurns: DevTurn[] }) {
 										</p>
 									</div>
 
-									{turn.translation && (
-										<div>
-											<p className="text-neutral-500 dark:text-neutral-400 text-xs mb-1">
-												Translation
-											</p>
-											<div className="flex gap-4 text-sm text-neutral-800 dark:text-neutral-200">
-												<span>Language: {turn.translation.detectedLang}</span>
-												<span>
-													{turn.translation.wasTranslated
-														? "Translated"
-														: "No translation needed"}
-												</span>
-											</div>
-										</div>
-									)}
-
 									<div>
 										<p className="text-neutral-500 dark:text-neutral-400 text-xs mb-1">
 											Generated Queries ({turn.retrieval.generatedQueries.length})
