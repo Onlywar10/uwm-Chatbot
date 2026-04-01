@@ -30,7 +30,6 @@
 		"drizzle-orm": "^0.45.1",
 		"drizzle-zod": "^0.8.3",
 		"framer-motion": "^12.26.2",
-		"googleapis": "^171.4.0",
 		"js-tiktoken": "^1.0.21",
 		"jsdom": "27.4.0",
 		"localtunnel": "^2.0.2",

@@ -1,13 +1,11 @@
-import { findRelevantContentForDomain } from "@/lib/ai/embedding";
-import { translateUserMessage, translateText } from "@/lib/ai/translate";
+import { findRelevantContentForDomain, findRelevantContentForDomains } from "@/lib/ai/embedding";
+import { getWidget } from "@/lib/actions/widgetConfigs";
 import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
 import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
 import {
 	convertToModelMessages,
-	createUIMessageStream,
-	createUIMessageStreamResponse,
 	generateText,
 	Output,
 	streamText,
@@ -65,15 +63,23 @@ const retrievalQueriesSchema = z.object({
 
 export async function POST(req: Request) {
 	const startTotal = performance.now();
-	const { messages }: { messages: UIMessage[] } = await req.json();
+	const { messages, widgetId }: { messages: UIMessage[]; widgetId?: string } = await req.json();
 
-	const domain = getDomainFromRequest(req) ?? "unknown";
+	let domain: string;
+	let widgetDomains: string[] | null = null;
+
+	if (widgetId) {
+		const widget = await getWidget(widgetId);
+		if (!widget || !widget.enabled) {
+			return new Response("Widget not found or disabled", { status: 404 });
+		}
+		widgetDomains = widget.domains;
+		domain = `widget:${widgetId}`;
+	} else {
+		domain = getDomainFromRequest(req) ?? "unknown";
+	}
+
 	const userText = getLastUserText(messages);
-	const {
-		detectedLang,
-		translatedText: englishText,
-		wasTranslated,
-	} = await translateUserMessage(userText);
 
 	const modelMessages = await convertToModelMessages(messages);
 
@@ -83,7 +89,7 @@ export async function POST(req: Request) {
 		system:
 			"You generate retrieval queries for a website knowledge base. " + "Return ONLY valid JSON.",
 		prompt:
-			`User question:\n${englishText}\n\n` +
+			`User question:\n${userText}\n\n` +
 			`Return a JSON object with this shape:\n` +
 			`{"queries":["..."]}\n` +
 			`Rules: 1 to 3 short search-style queries.`,
@@ -94,11 +100,15 @@ export async function POST(req: Request) {
 	const parsed = retrievalQueriesSchema.safeParse(queryGen.output);
 	const queries: string[] = parsed.success
 		? parsed.data.queries
-		: [englishText].filter(Boolean).slice(0, 1);
+		: [userText].filter(Boolean).slice(0, 1);
 
 	const startRetrieval = performance.now();
 	const results: RetrievalHit[][] = await Promise.all(
-		queries.map((query: string) => findRelevantContentForDomain(domain, query)),
+		queries.map((query: string) =>
+			widgetDomains
+				? findRelevantContentForDomains(widgetDomains, query)
+				: findRelevantContentForDomain(domain, query),
+		),
 	);
 	const endRetrieval = performance.now();
 
@@ -136,119 +146,56 @@ export async function POST(req: Request) {
 	const turnId = nanoid();
 	const startLlm = performance.now();
 
-	if (!wasTranslated) {
-		const result = streamText({
-			model: chatModel,
-			messages: modelMessages,
-			system: systemPrompt,
-			onFinish: async ({ text }) => {
-				const endTotal = performance.now();
-
-				const inputTokens = countTokens(systemPrompt + userText);
-				const outputTokens = countTokens(text);
-
-				const turn: DevTurn = {
-					id: turnId,
-					timestamp: new Date(),
-					domain,
-					status: text.includes("Sorry, I don't know") ? "no-answer" : "answered",
-					latency: {
-						total: Math.round(endTotal - startTotal),
-						queryGen: Math.round(endQueryGen - startQueryGen),
-						retrieval: Math.round(endRetrieval - startRetrieval),
-						llm: Math.round(endTotal - startLlm),
-					},
-					model: chatModel,
-					tokens: {
-						input: inputTokens,
-						output: outputTokens,
-					},
-					estimatedCost: calculateCost(chatModel, inputTokens, outputTokens),
-					retrieval: {
-						topK: TOP_K,
-						chunksReturned: unique.length,
-						generatedQueries: queries,
-						chunks: unique.map((hit) => ({
-							content: hit.name,
-							similarity: hit.similarity,
-						})),
-					},
-					prompt: {
-						system: systemPrompt,
-						userMessage: userText,
-					},
-					response: text,
-					translation: { detectedLang, wasTranslated },
-				};
-
-				await addTurn(turn);
-			},
-		});
-
-		return result.toUIMessageStreamResponse({
-			messageMetadata: ({ part }) => {
-				if (part.type === "start") return { turnId };
-			},
-		});
-	}
-
-	const result = await generateText({
+	const result = streamText({
 		model: chatModel,
 		messages: modelMessages,
 		system: systemPrompt,
+		onFinish: async ({ text }) => {
+			const endTotal = performance.now();
+
+			const inputTokens = countTokens(systemPrompt + userText);
+			const outputTokens = countTokens(text);
+
+			const turn: DevTurn = {
+				id: turnId,
+				timestamp: new Date(),
+				domain,
+				status: text.includes("Sorry, I don't know") ? "no-answer" : "answered",
+				latency: {
+					total: Math.round(endTotal - startTotal),
+					queryGen: Math.round(endQueryGen - startQueryGen),
+					retrieval: Math.round(endRetrieval - startRetrieval),
+					llm: Math.round(endTotal - startLlm),
+				},
+				model: chatModel,
+				tokens: {
+					input: inputTokens,
+					output: outputTokens,
+				},
+				estimatedCost: calculateCost(chatModel, inputTokens, outputTokens),
+				retrieval: {
+					topK: TOP_K,
+					chunksReturned: unique.length,
+					generatedQueries: queries,
+					chunks: unique.map((hit) => ({
+						content: hit.name,
+						similarity: hit.similarity,
+					})),
+				},
+				prompt: {
+					system: systemPrompt,
+					userMessage: userText,
+				},
+				response: text,
+			};
+
+			await addTurn(turn);
+		},
 	});
 
-	const englishResponse = result.text;
-	const finalResponse = await translateText(englishResponse, detectedLang, "en_GB");
-
-	const endTotal = performance.now();
-	const inputTokens = countTokens(systemPrompt + userText);
-	const outputTokens = countTokens(englishResponse);
-
-	const turn: DevTurn = {
-		id: turnId,
-		timestamp: new Date(),
-		domain,
-		status: englishResponse.includes("Sorry, I don't know") ? "no-answer" : "answered",
-		latency: {
-			total: Math.round(endTotal - startTotal),
-			queryGen: Math.round(endQueryGen - startQueryGen),
-			retrieval: Math.round(endRetrieval - startRetrieval),
-			llm: Math.round(endTotal - startLlm),
+	return result.toUIMessageStreamResponse({
+		messageMetadata: ({ part }) => {
+			if (part.type === "start") return { turnId };
 		},
-		model: chatModel,
-		tokens: {
-			input: inputTokens,
-			output: outputTokens,
-		},
-		estimatedCost: calculateCost(chatModel, inputTokens, outputTokens),
-		retrieval: {
-			topK: TOP_K,
-			chunksReturned: unique.length,
-			generatedQueries: queries,
-			chunks: unique.map((hit) => ({
-				content: hit.name,
-				similarity: hit.similarity,
-			})),
-		},
-		prompt: {
-			system: systemPrompt,
-			userMessage: userText,
-		},
-		response: finalResponse,
-		translation: { detectedLang, wasTranslated },
-	};
-
-	await addTurn(turn);
-
-	return createUIMessageStreamResponse({
-		stream: createUIMessageStream({
-			execute({ writer }) {
-				writer.write({ type: "message-metadata", messageMetadata: { turnId } });
-				writer.write({ type: "text-start", id: turnId });
-				writer.write({ type: "text-delta", delta: finalResponse, id: turnId });
-				writer.write({ type: "text-end", id: turnId });
-			},
-		}),
 	});
 }

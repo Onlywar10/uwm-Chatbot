@@ -33,8 +33,4 @@ export type DevTurn = {
 		userMessage: string;
 	};
 	response: string;
-	translation?: {
-		detectedLang: string;
-		wasTranslated: boolean;
-	};
 };

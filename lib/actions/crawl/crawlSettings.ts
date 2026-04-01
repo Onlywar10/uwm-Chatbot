@@ -1,7 +1,7 @@
 import { crawlSettings } from "../../db/schema/crawlSettings";
 import { db } from "../../db";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const upsertCrawlSettingsInputSchema = z.object({
 	domain: z.string().min(1),
@@ -59,12 +59,3 @@ export const upsertCrawlSettings = async (input: unknown, updateCrawlSetting: bo
 	}
 };
 
-export const updateCalendarProcessed = async (crawlSettingId: string) => {
-	const [processed] = await db
-		.update(crawlSettings)
-		.set({ calenderProcessed: true })
-		.where(and(eq(crawlSettings.calenderProcessed, false), eq(crawlSettings.id, crawlSettingId)))
-		.returning({ processed: crawlSettings.calenderProcessed });
-
-	return processed;
-};

@@ -1,5 +1,5 @@
 import { nanoid } from "@/lib/utils";
-import { pgTable, text, varchar, boolean, integer, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { schools } from "./schools";
 
@@ -19,7 +19,6 @@ export const crawlSettings = pgTable(
 		maxCharsPerPage: integer("max_chars_per_page").notNull(),
 		urlsToIgnore: text("urls_to_ignore").array().default(sql`'{}'::text[]`).notNull(),
 		pagesProcessed: integer("pages_processed").notNull().default(0),
-		calenderProcessed: boolean("calendar_processed").notNull().default(false),
 
 		createdAt: timestamp("created_at").notNull().default(sql`now()`),
 

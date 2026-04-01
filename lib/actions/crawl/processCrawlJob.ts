@@ -5,14 +5,12 @@ import { publishCrawlJob } from "./publish";
 
 import { extractTextFromPdf } from "../pdf";
 import { upsertResource } from "../resources";
-import { extractGoogleCalendarId, formatEventsforEmbedding } from "../calendar";
 
 import { canonicalizeUrl } from "@/lib/ai/url";
 
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { extractTextFromGoogleDoc } from "../googleDocs";
-import { updateCalendarProcessed } from "./crawlSettings";
 
 const verbose = process.env.NODE_ENV !== "production";
 
@@ -220,12 +218,6 @@ const processHtml = async (
 ) => {
 	const html = await response.text();
 	let contentText = "";
-
-	const calendarId = extractGoogleCalendarId(html);
-	if (calendarId) {
-		const canProcess = await updateCalendarProcessed(crawlSettingId);
-		if (canProcess) contentText += `${await formatEventsforEmbedding(calendarId)}\n`;
-	}
 
 	const dom = new JSDOM(html, { url: key });
 	const reader = new Readability(dom.window.document);

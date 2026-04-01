@@ -205,6 +205,8 @@ export async function startCrawl(
 					},
 				);
 			}
-		} catch {}
+		} catch (error) {
+			console.error("Crawl publish error:", error instanceof Error ? error.message : error);
+		}
 	}
 }

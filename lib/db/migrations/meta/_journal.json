@@ -15,6 +15,20 @@
       "when": 1772229110066,
       "tag": "0001_silly_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775018891168,
+      "tag": "0002_tiresome_ozymandias",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775026371948,
+      "tag": "0003_rapid_enchantress",
+      "breakpoints": true
     }
   ]
 }

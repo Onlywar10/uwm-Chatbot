@@ -1,6 +1,6 @@
 import { qstash } from "@/lib/qstash";
 
-const URL = `${process.env.APP_URL}/api/crawl`;
+const CRAWL_URL = `${process.env.APP_URL}/api/crawl`;
 
 type CrawlSettings = {
 	maxDepth?: number;
@@ -29,8 +29,9 @@ export async function publishCrawlJob(
 	crawlSetting: CrawlSettings,
 	flowControl: FlowControl,
 ) {
+	console.log(`Publishing crawl job to QStash: ${CRAWL_URL} for ${crawlUrl}`);
 	return await qstash.publishJSON({
-		url: URL,
+		url: CRAWL_URL,
 		body: {
 			crawlUrl,
 			domain,
