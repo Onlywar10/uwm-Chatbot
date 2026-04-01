@@ -21,7 +21,6 @@ export async function addTurn(turn: DevTurn): Promise<void> {
 		retrieval: turn.retrieval,
 		prompt: turn.prompt,
 		response: turn.response,
-		translation: turn.translation,
 	});
 }
 
@@ -41,7 +40,6 @@ export async function listTurns(limit = 50): Promise<DevTurn[]> {
 		retrieval: row.retrieval,
 		prompt: row.prompt,
 		response: row.response,
-		translation: row.translation ?? undefined,
 	}));
 }
 
@@ -64,7 +62,6 @@ export async function getTurn(id: string): Promise<DevTurn | null> {
 		retrieval: row.retrieval,
 		prompt: row.prompt,
 		response: row.response,
-		translation: row.translation ?? undefined,
 	};
 }
 

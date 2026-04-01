@@ -9,7 +9,6 @@ import { canonicalizeUrl, canonicalizeUrlString } from "@/lib/ai/url";
 import { requireAuth } from "@/lib/auth/guards";
 
 import { DEFAULT_CRAWL_OPTIONS } from "../crawlDefaults";
-import { extractGoogleCalendarId, formatEventsforEmbedding } from "../calendar";
 import { extractTextFromPdf } from "../pdf";
 import { extractTextFromGoogleDoc } from "../googleDocs";
 
@@ -239,7 +238,6 @@ export async function crawlSite(
 	}
 
 	let pagesProcessed = 0;
-	let calendarIngested = false;
 
 	const crawlSetting = await upsertCrawlSettings(
 		{
@@ -378,14 +376,6 @@ export async function crawlSite(
 			} else {
 				html = await response.text();
 				let contentText = "";
-
-				if (!calendarIngested) {
-					const calendarId = extractGoogleCalendarId(html);
-					if (calendarId) {
-						contentText += `${await formatEventsforEmbedding(calendarId)}\n`;
-						calendarIngested = true;
-					}
-				}
 
 				const dom = new JSDOM(html, { url: key });
 				const reader = new Readability(dom.window.document);
