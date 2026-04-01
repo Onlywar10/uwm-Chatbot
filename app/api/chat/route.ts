@@ -1,4 +1,5 @@
-import { findRelevantContentForDomain } from "@/lib/ai/embedding";
+import { findRelevantContentForDomain, findRelevantContentForDomains } from "@/lib/ai/embedding";
+import { getWidget } from "@/lib/actions/widgetConfigs";
 import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
 import type { DevTurn } from "@/lib/types/dev";
@@ -62,9 +63,22 @@ const retrievalQueriesSchema = z.object({
 
 export async function POST(req: Request) {
 	const startTotal = performance.now();
-	const { messages }: { messages: UIMessage[] } = await req.json();
+	const { messages, widgetId }: { messages: UIMessage[]; widgetId?: string } = await req.json();
 
-	const domain = getDomainFromRequest(req) ?? "unknown";
+	let domain: string;
+	let widgetDomains: string[] | null = null;
+
+	if (widgetId) {
+		const widget = await getWidget(widgetId);
+		if (!widget || !widget.enabled) {
+			return new Response("Widget not found or disabled", { status: 404 });
+		}
+		widgetDomains = widget.domains;
+		domain = `widget:${widgetId}`;
+	} else {
+		domain = getDomainFromRequest(req) ?? "unknown";
+	}
+
 	const userText = getLastUserText(messages);
 
 	const modelMessages = await convertToModelMessages(messages);
@@ -90,7 +104,11 @@ export async function POST(req: Request) {
 
 	const startRetrieval = performance.now();
 	const results: RetrievalHit[][] = await Promise.all(
-		queries.map((query: string) => findRelevantContentForDomain(domain, query)),
+		queries.map((query: string) =>
+			widgetDomains
+				? findRelevantContentForDomains(widgetDomains, query)
+				: findRelevantContentForDomain(domain, query),
+		),
 	);
 	const endRetrieval = performance.now();
 
