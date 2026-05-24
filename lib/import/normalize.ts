@@ -39,18 +39,32 @@ export function parseAge(value: string | undefined | null): {
 	return { raw, numeric: null };
 }
 
-/** master_file format, e.g. "2026-04-30 19:35:30". */
+/** master_file format, e.g. "2026-04-30 19:35:30" or "2026-04-27 9:29:26" (1-digit hour). */
 export function parseMasterDate(value: string | undefined | null): Date | null {
 	const v = nullify(value);
 	if (v == null) return null;
-	const d = new Date(v.replace(" ", "T"));
+	const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+	if (m) {
+		const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+		return Number.isNaN(d.getTime()) ? null : d;
+	}
+	const d = new Date(v);
 	return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** unmet & met format, e.g. "4/30/2026 4:53:00 PM". */
+/** unmet & met format, e.g. "4/30/2026 4:53:00 PM" (US, 12-hour, AM/PM). */
 export function parseReferralDate(value: string | undefined | null): Date | null {
 	const v = nullify(value);
 	if (v == null) return null;
+	const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?$/i);
+	if (m) {
+		let hour = +m[4];
+		const meridiem = m[7]?.toUpperCase();
+		if (meridiem === "PM" && hour !== 12) hour += 12;
+		if (meridiem === "AM" && hour === 12) hour = 0;
+		const d = new Date(+m[3], +m[1] - 1, +m[2], hour, +m[5], +m[6]);
+		return Number.isNaN(d.getTime()) ? null : d;
+	}
 	const d = new Date(v);
 	return Number.isNaN(d.getTime()) ? null : d;
 }
