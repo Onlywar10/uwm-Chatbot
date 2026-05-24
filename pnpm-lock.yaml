@@ -38,6 +38,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      csv-parse:
+        specifier: ^6.2.1
+        version: 6.2.1
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(@upstash/redis@1.37.0)(postgres@3.4.8)
@@ -1636,6 +1639,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  csv-parse@6.2.1:
+    resolution: {integrity: sha512-LRLMV+UCyfMokp8Wb411duBf1gaBKJfOfBWU9eHMJ+b+cJYZsNu3AFmjJf3+yPGd59Exz1TsMjaSFyxnYB9+IQ==}
 
   data-uri-to-buffer@4.0.1:
     resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
@@ -4590,6 +4596,8 @@ snapshots:
       rrweb-cssom: 0.8.0
 
   csstype@3.2.3: {}
+
+  csv-parse@6.2.1: {}
 
   data-uri-to-buffer@4.0.1: {}
 
