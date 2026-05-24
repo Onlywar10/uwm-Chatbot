@@ -29,6 +29,13 @@
       "when": 1775026371948,
       "tag": "0003_rapid_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779652576818,
+      "tag": "0004_flaky_wraith",
+      "breakpoints": true
     }
   ]
 }
