@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 import { calls } from "./calls";
 
@@ -24,20 +24,20 @@ export const needs = pgTable(
 
 		dateOfCall: timestamp("date_of_call").notNull(),
 
-		// Specific taxonomy leaf
-		taxonomyCode: varchar("taxonomy_code", { length: 32 }),
-		taxonomyName: varchar("taxonomy_name", { length: 256 }),
+		// Specific taxonomy leaf. Codes/names can be concatenated (" * "), so use text.
+		taxonomyCode: text("taxonomy_code"),
+		taxonomyName: text("taxonomy_name"),
 
 		// AIRS taxonomy hierarchy
-		level1Name: varchar("level1_name", { length: 128 }),
-		level2Code: varchar("level2_code", { length: 32 }),
-		level2Name: varchar("level2_name", { length: 256 }),
-		level3Code: varchar("level3_code", { length: 32 }),
-		level3Name: varchar("level3_name", { length: 256 }),
-		level4Code: varchar("level4_code", { length: 32 }),
-		level4Name: varchar("level4_name", { length: 256 }),
-		level5Code: varchar("level5_code", { length: 32 }),
-		level5Name: varchar("level5_name", { length: 256 }),
+		level1Name: text("level1_name"),
+		level2Code: text("level2_code"),
+		level2Name: text("level2_name"),
+		level3Code: text("level3_code"),
+		level3Name: text("level3_name"),
+		level4Code: text("level4_code"),
+		level4Name: text("level4_name"),
+		level5Code: text("level5_code"),
+		level5Name: text("level5_name"),
 
 		airsNeedCategory: varchar("airs_need_category", { length: 128 }),
 
