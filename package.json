@@ -15,7 +15,8 @@
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
 		"db:check": "drizzle-kit check",
-		"db:import": "tsx lib/import/index.ts"
+		"db:import": "tsx lib/import/index.ts",
+		"verify:queries": "tsx scripts/verify/index.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/react": "^3.0.35",
