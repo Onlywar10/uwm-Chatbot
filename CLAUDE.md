@@ -19,9 +19,13 @@ pnpm db:generate      # Generate migrations from schema changes
 pnpm db:migrate       # Run migrations (tsx lib/db/migrate.ts)
 pnpm db:push          # Push schema directly to database
 pnpm db:studio        # Open Drizzle Studio UI
+
+# 211 Analytics (internal)
+pnpm db:import --calls <master.csv> --referrals <unmet_met.csv>      # Truncate-reload analytics tables
+pnpm verify:queries --calls <master.csv> --referrals <unmet_met.csv> # Golden-number regression check
 ```
 
-No test framework is configured.
+No test framework is configured; `pnpm verify:queries` cross-checks analytics numbers against the CSVs.
 
 ## Tech Stack
 
@@ -57,6 +61,14 @@ No test framework is configured.
 ### Database Schema (`lib/db/schema/`)
 Core tables: `users`, `sessions`, `districts`, `schools`, `resources` (crawled content with contentHash dedup), `embeddings` (pgvector), `crawlSettings`, `crawlJobs`, `chatTurns`, `chatFeedback`
 
+Analytics tables: `calls` → `needs` → `referrals` (3-level grain from the 211 CSVs), `field_coverage` (per-field availability windows), `analytics_turns` (telemetry).
+
+### 211 Analytics Tooling (internal, admin-only)
+- **Data** (`lib/import/`): `pnpm db:import` parses the two 211 CSVs, normalizes/canonicalizes (`lib/data/canonical-maps.ts`), and truncate-reloads `calls`/`needs`/`referrals`, recomputing `field_coverage`. Three-level grain: one call → many needs → many agency referrals. "Calls", "needs", and "referrals" are distinct counts.
+- **Tools** (`lib/analytics/`): two AI-SDK tools, `queryCalls` + `queryServiceNeeds`, over one Drizzle builder (`builder.ts`). Filters are enums (low-card) + ILIKE (`agencyContains`/`taxonomyContains`); dates anchor to `max(entered_on)`. Every result carries denominator + coverage notes (structural honesty). Term→filter glossary in `lib/data/glossary.ts`.
+- **Surface**: `/admin/analytics` page + `/api/analytics` route, guarded by `requireRole('admin')` in the route. Model from `ANALYTICS_MODEL`, multi-step (`stopWhen` 5). Public `/api/chat` is untouched.
+- **Verify**: `pnpm verify:queries` cross-checks builder output against the CSVs.
+
 ### Key Patterns
 - **Server Actions** (`lib/actions/`) preferred over API routes for mutations
 - **Domain scoping**: resources, embeddings, and chat turns all partitioned by domain string
@@ -73,5 +85,6 @@ Validated at startup via `lib/env.mjs` (t3-env + Zod):
 | `GOOGLE_CALENDAR_API_URL` | Yes |
 | `GOOGLE_CALENDAR_API_KEY` | Yes |
 | `QSTASH_TOKEN` | Yes |
+| `ANALYTICS_MODEL` | No (defaults to `openai/gpt-4o`) |
 | `NODE_ENV` | No (defaults to `development`) |
 
