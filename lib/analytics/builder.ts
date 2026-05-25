@@ -64,7 +64,9 @@ function languageCondition(values: string[]): SQL | undefined {
 
 function callConditions(f: Filters): SQL[] {
 	return compact([
-		f.county ? ilike(calls.county, `%${f.county}%`) : undefined,
+		f.county
+			? ilike(calls.county, `%${f.county.replace(/\s*count(y|ies)$/i, "").trim()}%`)
+			: undefined,
 		f.city ? ilike(calls.city, `%${f.city}%`) : undefined,
 		f.postalCode ? eq(calls.postalCode, f.postalCode) : undefined,
 		f.language?.length ? languageCondition(f.language) : undefined,

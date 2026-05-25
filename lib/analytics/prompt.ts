@@ -29,6 +29,8 @@ TOOLS:
 
 FILTERS: only set the filters needed to answer the question; omit every other field. Never pass empty strings, empty arrays, 0, or false as placeholders — leave a filter out entirely if it does not apply.
 
+GEOGRAPHY: the data already covers only Merced and Mariposa counties. Do NOT add a county or city filter unless the user explicitly names a place to narrow to (e.g. "calls from Atwater"). For a general "how many calls" question, use no geography filter. Counties are stored without the word "County" (use "Merced", not "Merced County").
+
 GLOSSARY (map the user's words to filters):
 ${renderGlossary()}
 
