@@ -1,5 +1,6 @@
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 
+import { analyticsModel } from "@/lib/analytics/model";
 import { buildSystemPrompt } from "@/lib/analytics/prompt";
 import { logAnalyticsTurn } from "@/lib/analytics/telemetry";
 import { createAnalyticsTools, type ToolLog } from "@/lib/analytics/tools";
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
 	const modelMessages = await convertToModelMessages(trimmed);
 
 	const result = streamText({
-		model: env.ANALYTICS_MODEL,
+		model: analyticsModel(),
 		system: buildSystemPrompt(),
 		messages: modelMessages,
 		tools: createAnalyticsTools(toolLog),
