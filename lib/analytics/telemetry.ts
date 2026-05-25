@@ -20,8 +20,10 @@ export type TurnRecord = {
  */
 export async function logAnalyticsTurn(record: TurnRecord): Promise<void> {
 	try {
+		const hadError = record.toolLog.some((t) => t.error);
+		const status = hadError ? "error" : record.toolLog.length > 0 ? "answered" : "clarify";
 		await db.insert(analyticsTurns).values({
-			status: record.toolLog.length > 0 ? "answered" : "clarify",
+			status,
 			question: record.question,
 			response: record.response,
 			toolCalls: record.toolLog,

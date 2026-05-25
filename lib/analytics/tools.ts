@@ -10,7 +10,12 @@ import {
 import { getDataAnchor, resolveDateRange } from "./dates";
 import { queryCallsInputSchema, queryServiceNeedsInputSchema } from "./schema";
 
-export type ToolLog = { tool: string; input: unknown; rowCount: number };
+export type ToolLog = { tool: string; input: unknown; rowCount: number; error?: string };
+
+const TOOL_ERROR = {
+	error:
+		"The query failed to run. Tell the user there was a problem running that query and ask them to rephrase or try again.",
+};
 
 /**
  * The two analytics tools, sharing one query builder. A log array is passed in
@@ -31,38 +36,48 @@ export function createAnalyticsTools(log: ToolLog[]) {
 				"(day/week/month/year) or caller dimensions.",
 			inputSchema: queryCallsInputSchema,
 			execute: async (input) => {
-				const anchor = await getDataAnchor();
-				const range = resolveDateRange(input.filters?.dateRange, anchor);
-				const ctx = await getCoverageContext();
-				const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
+				try {
+					const anchor = await getDataAnchor();
+					const range = resolveDateRange(input.filters?.dateRange, anchor);
+					const ctx = await getCoverageContext();
+					const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
 
-				const result = await runCalls(input, range);
-				const denom = await runCalls(
-					{
-						metric: "count_calls",
-						filters: {
-							county: input.filters?.county,
-							city: input.filters?.city,
-							postalCode: input.filters?.postalCode,
+					const result = await runCalls(input, range);
+					const denom = await runCalls(
+						{
+							metric: "count_calls",
+							filters: {
+								county: input.filters?.county,
+								city: input.filters?.city,
+								postalCode: input.filters?.postalCode,
+							},
 						},
-					},
-					range,
-				);
+						range,
+					);
 
-				const payload = {
-					metric: input.metric,
-					resolvedDateRange: range.label,
-					groupedBy: input.groupBy ?? [],
-					denominator: {
-						description: `total calls in ${range.label}`,
-						value: denom.rows[0]?.value ?? 0,
-					},
-					coverageNotes: buildCoverageNotes(used, range, ctx),
-					fieldAvailability: fieldAvailability(used, ctx),
-					rows: result.rows,
-				};
-				log.push({ tool: "queryCalls", input, rowCount: result.rows.length });
-				return payload;
+					const payload = {
+						metric: input.metric,
+						resolvedDateRange: range.label,
+						groupedBy: input.groupBy ?? [],
+						denominator: {
+							description: `total calls in ${range.label}`,
+							value: denom.rows[0]?.value ?? 0,
+						},
+						coverageNotes: buildCoverageNotes(used, range, ctx),
+						fieldAvailability: fieldAvailability(used, ctx),
+						rows: result.rows,
+					};
+					log.push({ tool: "queryCalls", input, rowCount: result.rows.length });
+					return payload;
+				} catch (err) {
+					log.push({
+						tool: "queryCalls",
+						input,
+						rowCount: 0,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					return TOOL_ERROR;
+				}
 			},
 		}),
 
@@ -75,39 +90,50 @@ export function createAnalyticsTools(log: ToolLog[]) {
 				"time, needCategory, taxonomy, level1, reasonIfUnmet, or agency.",
 			inputSchema: queryServiceNeedsInputSchema,
 			execute: async (input) => {
-				const anchor = await getDataAnchor();
-				const range = resolveDateRange(input.filters?.dateRange, anchor);
-				const ctx = await getCoverageContext();
-				const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
+				try {
+					const anchor = await getDataAnchor();
+					const range = resolveDateRange(input.filters?.dateRange, anchor);
+					const ctx = await getCoverageContext();
+					const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
 
-				const result = await runServiceNeeds(input, range);
-				const denomMetric = input.metric === "count_referrals" ? "count_referrals" : "count_needs";
-				const denom = await runServiceNeeds(
-					{
-						metric: denomMetric,
-						filters: {
-							county: input.filters?.county,
-							city: input.filters?.city,
-							postalCode: input.filters?.postalCode,
+					const result = await runServiceNeeds(input, range);
+					const denomMetric =
+						input.metric === "count_referrals" ? "count_referrals" : "count_needs";
+					const denom = await runServiceNeeds(
+						{
+							metric: denomMetric,
+							filters: {
+								county: input.filters?.county,
+								city: input.filters?.city,
+								postalCode: input.filters?.postalCode,
+							},
 						},
-					},
-					range,
-				);
+						range,
+					);
 
-				const payload = {
-					metric: input.metric,
-					resolvedDateRange: range.label,
-					groupedBy: input.groupBy ?? [],
-					denominator: {
-						description: `total ${denomMetric === "count_referrals" ? "referrals" : "needs"} in ${range.label}`,
-						value: denom.rows[0]?.value ?? 0,
-					},
-					coverageNotes: buildCoverageNotes(used, range, ctx),
-					fieldAvailability: fieldAvailability(used, ctx),
-					rows: result.rows,
-				};
-				log.push({ tool: "queryServiceNeeds", input, rowCount: result.rows.length });
-				return payload;
+					const payload = {
+						metric: input.metric,
+						resolvedDateRange: range.label,
+						groupedBy: input.groupBy ?? [],
+						denominator: {
+							description: `total ${denomMetric === "count_referrals" ? "referrals" : "needs"} in ${range.label}`,
+							value: denom.rows[0]?.value ?? 0,
+						},
+						coverageNotes: buildCoverageNotes(used, range, ctx),
+						fieldAvailability: fieldAvailability(used, ctx),
+						rows: result.rows,
+					};
+					log.push({ tool: "queryServiceNeeds", input, rowCount: result.rows.length });
+					return payload;
+				} catch (err) {
+					log.push({
+						tool: "queryServiceNeeds",
+						input,
+						rowCount: 0,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					return TOOL_ERROR;
+				}
 			},
 		}),
 	};

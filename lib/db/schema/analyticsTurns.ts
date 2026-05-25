@@ -20,7 +20,7 @@ export const analyticsTurnStatusEnum = pgEnum("analytics_turn_status", [
 	"error",
 ]);
 
-export type ToolCallLog = { tool: string; input: unknown; rowCount?: number };
+export type ToolCallLog = { tool: string; input: unknown; rowCount?: number; error?: string };
 export type TokensJson = { input: number; output: number };
 
 /**
