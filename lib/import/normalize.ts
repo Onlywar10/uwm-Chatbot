@@ -39,13 +39,17 @@ export function parseAge(value: string | undefined | null): {
 	return { raw, numeric: null };
 }
 
+// CSV timestamps are naive local wall-clock values. We store them via Date.UTC
+// so the wall-clock is preserved exactly in the timestamp column (no tz shift);
+// all reads (dates.ts) interpret the column in UTC to match.
+
 /** master_file format, e.g. "2026-04-30 19:35:30" or "2026-04-27 9:29:26" (1-digit hour). */
 export function parseMasterDate(value: string | undefined | null): Date | null {
 	const v = nullify(value);
 	if (v == null) return null;
 	const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{1,2}):(\d{1,2})$/);
 	if (m) {
-		const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+		const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
 		return Number.isNaN(d.getTime()) ? null : d;
 	}
 	const d = new Date(v);
@@ -62,7 +66,7 @@ export function parseReferralDate(value: string | undefined | null): Date | null
 		const meridiem = m[7]?.toUpperCase();
 		if (meridiem === "PM" && hour !== 12) hour += 12;
 		if (meridiem === "AM" && hour === 12) hour = 0;
-		const d = new Date(+m[3], +m[1] - 1, +m[2], hour, +m[5], +m[6]);
+		const d = new Date(Date.UTC(+m[3], +m[1] - 1, +m[2], hour, +m[5], +m[6]));
 		return Number.isNaN(d.getTime()) ? null : d;
 	}
 	const d = new Date(v);

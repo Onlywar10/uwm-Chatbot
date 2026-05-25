@@ -20,23 +20,26 @@ export type ResolvedRange = { from: Date | null; to: Date | null; label: string 
  */
 export async function getDataAnchor(): Promise<Date> {
 	const [row] = await db.select({ max: sql<string | null>`max(${calls.enteredOn})` }).from(calls);
-	return row?.max ? new Date(row.max) : new Date();
+	if (!row?.max) return new Date();
+	// The timestamp column is naive UTC wall-clock; parse it as UTC.
+	const iso = typeof row.max === "string" ? `${row.max.replace(" ", "T")}Z` : row.max;
+	return new Date(iso);
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function monthLabel(d: Date): string {
-	return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+	return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 function ymd(d: Date): string {
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+	return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 function mondayOf(d: Date): Date {
-	const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-	const offset = (x.getDay() + 6) % 7; // 0 = Monday
-	x.setDate(x.getDate() - offset);
+	const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+	const offset = (x.getUTCDay() + 6) % 7; // 0 = Monday
+	x.setUTCDate(x.getUTCDate() - offset);
 	return x;
 }
 
@@ -58,23 +61,23 @@ export function resolveDateRange(input: DateRangeInput | undefined, anchor: Date
 		case "last_week": {
 			const to = mondayOf(anchor); // start of the anchor's (partial) week
 			const from = new Date(to);
-			from.setDate(from.getDate() - 7);
+			from.setUTCDate(from.getUTCDate() - 7);
 			return { from, to, label: `week of ${ymd(from)}` };
 		}
 		case "last_month": {
-			const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-			const to = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+			const from = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
+			const to = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, 1));
 			return { from, to, label: monthLabel(from) };
 		}
 		case "last_3_months": {
-			const from = new Date(anchor.getFullYear(), anchor.getMonth() - 2, 1);
-			const to = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+			const from = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() - 2, 1));
+			const to = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, 1));
 			return { from, to, label: `${monthLabel(from)} – ${monthLabel(anchor)}` };
 		}
 		case "last_year": {
-			const from = new Date(anchor.getFullYear(), 0, 1);
-			const to = new Date(anchor.getFullYear() + 1, 0, 1);
-			return { from, to, label: `${anchor.getFullYear()}` };
+			const from = new Date(Date.UTC(anchor.getUTCFullYear(), 0, 1));
+			const to = new Date(Date.UTC(anchor.getUTCFullYear() + 1, 0, 1));
+			return { from, to, label: `${anchor.getUTCFullYear()}` };
 		}
 		default:
 			return { from: null, to: null, label: "all available data" };
