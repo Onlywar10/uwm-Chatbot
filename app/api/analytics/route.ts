@@ -7,7 +7,7 @@ import { createAnalyticsTools, type ToolLog } from "@/lib/analytics/tools";
 import { requireRole } from "@/lib/auth/guards";
 import { env } from "@/lib/env.mjs";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_MESSAGES = 20;
 
