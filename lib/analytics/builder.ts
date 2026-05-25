@@ -133,8 +133,11 @@ function hasCallFilter(f: Filters): boolean {
 // Group-by + metric expressions
 // ---------------------------------------------------------------------------
 
-const timeExpr = (col: SQL | ReturnType<typeof sql>, unit: string, fmt: string): SQL =>
-	sql`to_char(date_trunc(${unit}, ${col}), ${fmt})`;
+// unit/fmt are fixed internal constants (never user input), inlined as raw SQL
+// so the expression carries no bind params — otherwise the same expression in
+// SELECT and GROUP BY renders with different param numbers and Postgres rejects it.
+const timeExpr = (col: SQL, unit: string, fmt: string): SQL =>
+	sql`to_char(date_trunc('${sql.raw(unit)}', ${col}), '${sql.raw(fmt)}')`;
 
 function callGroupExpr(key: string): SQL {
 	switch (key) {
