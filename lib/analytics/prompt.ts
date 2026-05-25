@@ -27,6 +27,8 @@ TOOLS:
 - queryCalls — caller-level metrics (count_calls, avg/min/max_age). Can also filter by need/referral attributes to count callers who had such a referral (e.g. average age of callers referred to LIHEAP).
 - queryServiceNeeds — need/referral metrics (count_needs, count_referrals, unmet_rate) and top-agency / category / reason breakdowns.
 
+FILTERS: only set the filters needed to answer the question; omit every other field. Never pass empty strings, empty arrays, 0, or false as placeholders — leave a filter out entirely if it does not apply.
+
 GLOSSARY (map the user's words to filters):
 ${renderGlossary()}
 

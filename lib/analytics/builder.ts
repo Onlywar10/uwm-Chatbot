@@ -1,18 +1,4 @@
-import {
-	and,
-	asc,
-	desc,
-	eq,
-	gt,
-	gte,
-	ilike,
-	inArray,
-	lt,
-	lte,
-	or,
-	type SQL,
-	sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or, type SQL, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { calls } from "@/lib/db/schema/calls";
@@ -25,6 +11,43 @@ export type ResultRow = { group: Record<string, string | null>; value: number };
 export type QueryResult = { groupByKeys: string[]; rows: ResultRow[] };
 
 const compact = (xs: (SQL | undefined)[]): SQL[] => xs.filter((x): x is SQL => x !== undefined);
+
+/** Naive UTC "YYYY-MM-DD HH:mm:ss" string for comparing against the timestamp column without tz drift. */
+const naive = (d: Date): string => d.toISOString().slice(0, 19).replace("T", " ");
+
+/**
+ * Drops "no-op" filter values. The model tends to populate every optional field
+ * with empty/zero/false placeholders; without this, e.g. ageMax:0 or
+ * needUnmet:false would be treated as real filters and wrongly return ~0 rows.
+ * Only `true` counts as an active boolean filter; 0 numerics and empty
+ * strings/arrays are treated as unset.
+ */
+export function cleanFilters(f: Filters): Filters {
+	const arr = <T>(a?: T[]) => (a && a.length > 0 ? a : undefined);
+	const str = (s?: string) => (s?.trim() ? s : undefined);
+	const num = (n?: number) => (typeof n === "number" && n > 0 ? n : undefined);
+	const bool = (b?: boolean) => (b === true ? true : undefined);
+	return {
+		dateRange: f.dateRange,
+		county: str(f.county),
+		city: str(f.city),
+		postalCode: str(f.postalCode),
+		language: arr(f.language),
+		gender: arr(f.gender),
+		ethnicity: arr(f.ethnicity),
+		healthInsurance: arr(f.healthInsurance),
+		needCategory: arr(f.needCategory),
+		reasonIfUnmet: arr(f.reasonIfUnmet),
+		taxonomyContains: str(f.taxonomyContains),
+		agencyContains: str(f.agencyContains),
+		ageMin: num(f.ageMin),
+		ageMax: num(f.ageMax),
+		teleInterpretationUsed: bool(f.teleInterpretationUsed),
+		hasChildren0to5: bool(f.hasChildren0to5),
+		hasSeniors: bool(f.hasSeniors),
+		needUnmet: bool(f.needUnmet),
+	};
+}
 
 // ---------------------------------------------------------------------------
 // Conditions
@@ -213,10 +236,10 @@ const clampLimit = (n: number | undefined): number => Math.min(Math.max(n ?? 50,
 // ---------------------------------------------------------------------------
 
 export async function runCalls(input: QueryCallsInput, range: ResolvedRange): Promise<QueryResult> {
-	const f = input.filters ?? {};
+	const f = cleanFilters(input.filters ?? {});
 	const where = compact([
-		range.from ? gte(calls.enteredOn, range.from) : undefined,
-		range.to ? lt(calls.enteredOn, range.to) : undefined,
+		range.from ? sql`${calls.enteredOn} >= ${naive(range.from)}` : undefined,
+		range.to ? sql`${calls.enteredOn} < ${naive(range.to)}` : undefined,
 		...callConditions(f),
 	]);
 
@@ -255,15 +278,15 @@ export async function runServiceNeeds(
 	input: QueryServiceNeedsInput,
 	range: ResolvedRange,
 ): Promise<QueryResult> {
-	const f = input.filters ?? {};
+	const f = cleanFilters(input.filters ?? {});
 	const groupBy = input.groupBy ?? [];
 	const joinReferrals =
 		input.metric === "count_referrals" || groupBy.includes("agency") || Boolean(f.agencyContains);
 	const joinCalls = hasCallFilter(f);
 
 	const where = compact([
-		range.from ? gte(needs.dateOfCall, range.from) : undefined,
-		range.to ? lt(needs.dateOfCall, range.to) : undefined,
+		range.from ? sql`${needs.dateOfCall} >= ${naive(range.from)}` : undefined,
+		range.to ? sql`${needs.dateOfCall} < ${naive(range.to)}` : undefined,
 		...needConditions(f),
 		...(joinReferrals ? referralConditions(f) : []),
 		...(joinCalls ? callConditions(f) : []),

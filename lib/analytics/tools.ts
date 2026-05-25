@@ -1,6 +1,6 @@
 import { tool } from "ai";
 
-import { runCalls, runServiceNeeds } from "./builder";
+import { cleanFilters, runCalls, runServiceNeeds } from "./builder";
 import {
 	buildCoverageNotes,
 	fieldAvailability,
@@ -34,7 +34,7 @@ export function createAnalyticsTools(log: ToolLog[]) {
 				const anchor = await getDataAnchor();
 				const range = resolveDateRange(input.filters?.dateRange, anchor);
 				const ctx = await getCoverageContext();
-				const used = usedCoverageFields(input.filters ?? {}, input.groupBy ?? []);
+				const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
 
 				const result = await runCalls(input, range);
 				const denom = await runCalls(
@@ -78,7 +78,7 @@ export function createAnalyticsTools(log: ToolLog[]) {
 				const anchor = await getDataAnchor();
 				const range = resolveDateRange(input.filters?.dateRange, anchor);
 				const ctx = await getCoverageContext();
-				const used = usedCoverageFields(input.filters ?? {}, input.groupBy ?? []);
+				const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
 
 				const result = await runServiceNeeds(input, range);
 				const denomMetric = input.metric === "count_referrals" ? "count_referrals" : "count_needs";
