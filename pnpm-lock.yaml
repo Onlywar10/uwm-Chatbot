@@ -74,6 +74,9 @@ importers:
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
+      minisearch:
+        specifier: ^7.2.0
+        version: 7.2.0
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -2740,6 +2743,9 @@ packages:
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
+
+  minisearch@7.2.0:
+    resolution: {integrity: sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg==}
 
   motion-dom@12.26.2:
     resolution: {integrity: sha512-KLMT1BroY8oKNeliA3JMNJ+nbCIsTKg6hJpDb4jtRAJ7nCKnnpg/LTq/NGqG90Limitz3kdAnAVXecdFVGlWTw==}
@@ -5935,6 +5941,8 @@ snapshots:
       '@isaacs/brace-expansion': 5.0.0
 
   minimist@1.2.8: {}
+
+  minisearch@7.2.0: {}
 
   motion-dom@12.26.2:
     dependencies:
