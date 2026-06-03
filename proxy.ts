@@ -1,36 +1,25 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const SESSION_COOKIE = "session_token";
+// Public surface that must work WITHOUT a Clerk session: the sign-in page, the
+// embedded chat widget + its API, and the QStash crawl webhook.
+const isPublicRoute = createRouteMatcher([
+	"/sign-in(.*)",
+	"/api/chat(.*)",
+	"/api/crawl(.*)",
+	"/widget(.*)",
+]);
 
-function isPublicPath(pathname: string) {
-	return (
-		pathname.startsWith("/_next") ||
-		pathname.startsWith("/favicon") ||
-		pathname.startsWith("/robots.txt") ||
-		pathname.startsWith("/sitemap.xml") ||
-		pathname.startsWith("/icons/") ||
-		pathname.startsWith("/images/") ||
-		pathname.startsWith("/login") ||
-		pathname.startsWith("/api/chat") ||
-		pathname.startsWith("/api/crawl") ||
-		pathname.startsWith("/widget")
-	);
-}
-
-export function proxy(req: NextRequest) {
-	const { pathname } = req.nextUrl;
-
-	if (isPublicPath(pathname)) return NextResponse.next();
-
-	const token = req.cookies.get(SESSION_COOKIE)?.value;
-	if (!token) {
-		return NextResponse.redirect(new URL("/login", req.url));
+export default clerkMiddleware(async (auth, req) => {
+	if (!isPublicRoute(req)) {
+		await auth.protect();
 	}
-
-	return NextResponse.next();
-}
+});
 
 export const config = {
-	matcher: ["/:path*"],
+	matcher: [
+		// Skip Next.js internals and static files unless found in search params.
+		"/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+		// Always run for API routes.
+		"/(api|trpc)(.*)",
+	],
 };

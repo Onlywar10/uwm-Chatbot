@@ -54,9 +54,9 @@ No test framework is configured; `pnpm verify:queries` cross-checks analytics nu
 - Embeddings stored with HNSW index, domain-scoped
 
 ### Auth (`lib/auth/`)
-- Session-based: SHA256-hashed tokens, 7-day expiry
-- Two roles: `admin` (full access), `crawler` (crawl ops only)
-- Guards: `requireAuth()`, `requireRole()` for server actions
+- **Clerk** is the identity provider (`@clerk/nextjs` v7). `ClerkProvider` wraps the app in `app/layout.tsx`; `clerkMiddleware()` in `proxy.ts` protects every route except the public surface (`/sign-in`, `/api/chat`, `/api/crawl`, `/widget`). Sign-in UI is Clerk's prebuilt `<SignIn/>` at `/sign-in`; logout is `<SignOutButton>` in `components/LogoutButton.tsx`.
+- Single access level: any signed-in user can access all protected routes (no role tiers). Guards `requireAuth()` / `requireRole()` in `lib/auth/guards.ts` both resolve to "is signed in?" via Clerk `auth()`; `requireRole`'s argument is ignored and kept only for call-site compatibility.
+- The legacy `users`/`sessions` tables are no longer used by auth (Clerk owns identity + sessions); they remain in the schema pending an optional cleanup migration.
 
 ### Database Schema (`lib/db/schema/`)
 Core tables: `users`, `sessions`, `districts`, `schools`, `resources` (crawled content with contentHash dedup), `embeddings` (pgvector), `crawlSettings`, `crawlJobs`, `chatTurns`, `chatFeedback`
@@ -82,6 +82,8 @@ Validated at startup via `lib/env.mjs` (t3-env + Zod):
 | Variable | Required |
 |---|---|
 | `DATABASE_URL` | Yes |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes |
+| `CLERK_SECRET_KEY` | Yes |
 | `GOOGLE_CALENDAR_API_URL` | Yes |
 | `GOOGLE_CALENDAR_API_KEY` | Yes |
 | `QSTASH_TOKEN` | Yes |

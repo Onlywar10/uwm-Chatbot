@@ -20,24 +20,24 @@ export type CanonicalMap = Record<string, string>;
 
 export const ethnicityMap: CanonicalMap = {
 	"Hispanic / Latin@": "Hispanic/Latino",
-	"Mexican/Mexican-American/Chicano": "Hispanic/Latino", // ⚠️ collapses post-2025 granular bucket
-	"Central American": "Hispanic/Latino", // ⚠️
+	"Mexican/Mexican-American/Chicano": "Hispanic/Latino", 
+	"Central American": "Hispanic/Latino", 
 	"African American/Black": "Black/African American",
 	"Black or African American": "Black/African American",
-	African: "Black/African American", // ⚠️ African immigrant vs African American — confirm
+	African: "Black/African American",
 	Caucasian: "White",
 	White: "White",
-	European: "White", // ⚠️
+	European: "White",
 	Asian: "Asian",
-	Filipino: "Asian", // ⚠️
-	Korean: "Asian", // ⚠️
+	Filipino: "Asian",
+	Korean: "Asian", 
 	"Native American": "Native American",
-	"Native Amercian": "Native American", // typo fix
+	"Native Amercian": "Native American", 
 	"Pacific Islander / Native Hawaiian": "Pacific Islander/Native Hawaiian",
 	"Pacific Islander": "Pacific Islander/Native Hawaiian",
 	"Middle Eastern": "Middle Eastern",
-	Assyrian: "Middle Eastern", // ⚠️
-	Portuguese: "Portuguese", // kept separate (notable Central Valley community)
+	Assyrian: "Middle Eastern",
+	Portuguese: "Portuguese",
 	"Multi-ethnic": "Multiple ethnicities",
 	"More than one ethnicity": "Multiple ethnicities",
 	"Declined to answer": "Declined",
