@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 	try {
 		await requireAuth();
 	} catch {
-		redirect("/login");
+		redirect("/sign-in");
 	}
 
 	return (

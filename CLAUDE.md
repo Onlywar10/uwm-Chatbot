@@ -19,9 +19,13 @@ pnpm db:generate      # Generate migrations from schema changes
 pnpm db:migrate       # Run migrations (tsx lib/db/migrate.ts)
 pnpm db:push          # Push schema directly to database
 pnpm db:studio        # Open Drizzle Studio UI
+
+# 211 Analytics (internal)
+pnpm db:import --calls <master.csv> --referrals <unmet_met.csv>      # Truncate-reload analytics tables
+pnpm verify:queries --calls <master.csv> --referrals <unmet_met.csv> # Golden-number regression check
 ```
 
-No test framework is configured.
+No test framework is configured; `pnpm verify:queries` cross-checks analytics numbers against the CSVs.
 
 ## Tech Stack
 
@@ -50,12 +54,20 @@ No test framework is configured.
 - Embeddings stored with HNSW index, domain-scoped
 
 ### Auth (`lib/auth/`)
-- Session-based: SHA256-hashed tokens, 7-day expiry
-- Two roles: `admin` (full access), `crawler` (crawl ops only)
-- Guards: `requireAuth()`, `requireRole()` for server actions
+- **Clerk** is the identity provider (`@clerk/nextjs` v7). `ClerkProvider` wraps the app in `app/layout.tsx`; `clerkMiddleware()` in `proxy.ts` protects every route except the public surface (`/sign-in`, `/api/chat`, `/api/crawl`, `/widget`). Sign-in UI is Clerk's prebuilt `<SignIn/>` at `/sign-in`; logout is `<SignOutButton>` in `components/LogoutButton.tsx`.
+- Single access level: any signed-in user can access all protected routes (no role tiers). Guards `requireAuth()` / `requireRole()` in `lib/auth/guards.ts` both resolve to "is signed in?" via Clerk `auth()`; `requireRole`'s argument is ignored and kept only for call-site compatibility.
+- The legacy `users`/`sessions` tables are no longer used by auth (Clerk owns identity + sessions); they remain in the schema pending an optional cleanup migration.
 
 ### Database Schema (`lib/db/schema/`)
 Core tables: `users`, `sessions`, `districts`, `schools`, `resources` (crawled content with contentHash dedup), `embeddings` (pgvector), `crawlSettings`, `crawlJobs`, `chatTurns`, `chatFeedback`
+
+Analytics tables: `calls` → `needs` → `referrals` (3-level grain from the 211 CSVs), `field_coverage` (per-field availability windows), `analytics_turns` (telemetry).
+
+### 211 Analytics Tooling (internal, admin-only)
+- **Data** (`lib/import/`): `pnpm db:import` parses the two 211 CSVs, normalizes/canonicalizes (`lib/data/canonical-maps.ts`), and truncate-reloads `calls`/`needs`/`referrals`, recomputing `field_coverage`. Three-level grain: one call → many needs → many agency referrals. "Calls", "needs", and "referrals" are distinct counts.
+- **Tools** (`lib/analytics/`): two AI-SDK tools, `queryCalls` + `queryServiceNeeds`, over one Drizzle builder (`builder.ts`). Filters are enums (low-card) + ILIKE (`agencyContains`/`taxonomyContains`); dates anchor to `max(entered_on)`. Every result carries denominator + coverage notes (structural honesty). Term→filter glossary in `lib/data/glossary.ts`.
+- **Surface**: `/admin/analytics` page + `/api/analytics` route, guarded by `requireRole('admin')` in the route. Model from `ANALYTICS_MODEL`, multi-step (`stopWhen` 5). Public `/api/chat` is untouched.
+- **Verify**: `pnpm verify:queries` cross-checks builder output against the CSVs.
 
 ### Key Patterns
 - **Server Actions** (`lib/actions/`) preferred over API routes for mutations
@@ -70,8 +82,11 @@ Validated at startup via `lib/env.mjs` (t3-env + Zod):
 | Variable | Required |
 |---|---|
 | `DATABASE_URL` | Yes |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes |
+| `CLERK_SECRET_KEY` | Yes |
 | `GOOGLE_CALENDAR_API_URL` | Yes |
 | `GOOGLE_CALENDAR_API_KEY` | Yes |
 | `QSTASH_TOKEN` | Yes |
+| `ANALYTICS_MODEL` | No (defaults to `openai/gpt-4o`) |
 | `NODE_ENV` | No (defaults to `development`) |
 

@@ -98,6 +98,12 @@ export default function AdminClient({ allDistricts }: { allDistricts: District[]
 
 				<div className="flex items-center gap-3">
 					<a
+						href="/admin/analytics"
+						className="text-sm underline text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300"
+					>
+						Analytics
+					</a>
+					<a
 						href="/admin/feedback"
 						className="text-sm underline text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300"
 					>

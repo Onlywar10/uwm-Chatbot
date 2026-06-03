@@ -1,30 +1,22 @@
-import { cookies } from "next/headers";
+import { auth } from "@clerk/nextjs/server";
 
-import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+// Identity is owned by Clerk. There is a single access level: any signed-in
+// user may access every protected route. The middleware (proxy.ts) already
+// enforces this at the edge; these guards are the server-side backstop for
+// server actions and route handlers.
 
 export async function requireAuth() {
-	const cookieStore = await cookies();
-	const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+	const { userId } = await auth();
 
-	if (!token) {
+	if (!userId) {
 		throw new Error("Unauthorized");
 	}
 
-	const user = await validateSession(token);
-	if (!user) {
-		cookieStore.delete(SESSION_COOKIE_NAME);
-		throw new Error("Unauthorized");
-	}
-
-	return user;
+	return { userId };
 }
 
-export async function requireRole(role: "admin" | "crawler") {
-	const user = await requireAuth();
-
-	if (user.role !== role) {
-		throw new Error("Forbidden");
-	}
-
-	return user;
+// Role-agnostic: kept for call-site compatibility. The `role` argument is
+// intentionally ignored — there are no role tiers in this version.
+export async function requireRole(_role: "admin" | "crawler") {
+	return requireAuth();
 }

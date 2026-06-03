@@ -12,7 +12,7 @@ export default async function DevLayout({ children }: { children: React.ReactNod
 	try {
 		await requireRole("admin");
 	} catch {
-		redirect("/login");
+		redirect("/sign-in");
 	}
 
 	return (
