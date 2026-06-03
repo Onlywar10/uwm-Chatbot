@@ -42,3 +42,15 @@ export function canonicalizeUrlString(raw: string, opts?: { dropAllQuery?: boole
 export function canonicalizeUrl(u: URL, opts?: { dropAllQuery?: boolean }) {
 	return new URL(canonicalizeUrlString(u.toString(), opts));
 }
+
+export function getDomain(url: string) {
+	const startCanonical = canonicalizeUrlString(url.trim(), { dropAllQuery: true });
+	const start = new URL(startCanonical);
+
+	const hostname = start.hostname.toLowerCase();
+	const pathSegments = start.pathname.split("/").filter(Boolean);
+	const basePrefix = pathSegments.length > 0 ? `/${pathSegments[0]}` : "";
+	const domain = basePrefix ? `${hostname}${basePrefix}` : hostname;
+
+	return domain;
+}
