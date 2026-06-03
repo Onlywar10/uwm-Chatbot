@@ -4,10 +4,9 @@ export default function SignInPage() {
 	return (
 		<main className="flex min-h-screen items-center justify-center bg-background px-4">
 			<SignIn
-				// Land on the analytics dashboard by default after sign-in. Used as a
-				// fallback so deep-links to a protected page (?redirect_url=...) still
-				// return the user to where they were headed.
-				fallbackRedirectUrl="/admin/analytics"
+				// Every successful sign-in lands on the analytics dashboard,
+				// unconditionally — this overrides any ?redirect_url deep-link.
+				forceRedirectUrl="/admin/analytics"
 				appearance={{
 					elements: {
 						card: "shadow-none border border-border",
