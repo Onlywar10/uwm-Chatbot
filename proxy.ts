@@ -11,7 +11,11 @@ const isPublicRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
 	if (!isPublicRoute(req)) {
-		await auth.protect();
+		// Send signed-out users to our in-app /sign-in page, never Clerk's
+		// hosted Account Portal (which would ignore our redirect config).
+		await auth.protect({
+			unauthenticatedUrl: new URL("/sign-in", req.url).toString(),
+		});
 	}
 });
 
