@@ -10,13 +10,10 @@ export function countTokens(text: string): number {
 const PRICING: Record<string, { input: number; output: number }> = {
 	"gpt-4o-mini": { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
 	"gpt-4o": { input: 2.5 / 1_000_000, output: 10 / 1_000_000 },
+	"gpt-5": { input: 1.25 / 1_000_000, output: 10 / 1_000_000 },
 };
 
-export function calculateCost(
-	model: string,
-	inputTokens: number,
-	outputTokens: number,
-): number {
+export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
 	const pricing = PRICING[model] ?? PRICING["gpt-4o-mini"];
 	return inputTokens * pricing.input + outputTokens * pricing.output;
 }
