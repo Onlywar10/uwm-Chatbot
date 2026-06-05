@@ -1,53 +1,53 @@
+"use server";
+
 import { crawlSettings } from "../../db/schema/crawlSettings";
 import { db } from "../../db";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { getDomain } from "@/lib/ai/url";
 
 const upsertCrawlSettingsInputSchema = z.object({
 	domain: z.string().min(1),
-	maxCrawlDepth: z.number(),
-	maxCrawlPages: z.number(),
-	maxCharsPerPage: z.number(),
+	maxCrawlDepth: z.number().min(0),
+	maxCrawlPages: z.number().min(1),
+	maxCharsPerPage: z.number().min(1000),
 	useSitemaps: z.boolean(),
 	ignoreRobots: z.boolean(),
 	dropAllQuery: z.boolean(),
+	renderJavascript: z.boolean(),
 	urlsToIgnore: z.string().array(),
-	schoolId: z.string().min(1),
+	entityType: z.enum(["district", "school"]),
+	entityId: z.string().min(1),
 });
 
-export const upsertCrawlSettings = async (input: unknown, updateCrawlSetting: boolean) => {
+export const upsertCrawlSettings = async (input: unknown) => {
 	try {
 		const parsed = upsertCrawlSettingsInputSchema.parse(input);
 
-		return await db.transaction(async (tx) => {
-			if (updateCrawlSetting) {
-				const [crawlSetting] = await tx
-					.insert(crawlSettings)
-					.values(parsed)
-					.onConflictDoUpdate({
-						target: crawlSettings.domain,
-						set: parsed,
-					})
-					.returning({ id: crawlSettings.id });
+		const [crawlSetting] = await db
+			.insert(crawlSettings)
+			.values(parsed)
+			.onConflictDoUpdate({
+				target: crawlSettings.domain,
+				set: {
+					maxCrawlDepth: parsed.maxCrawlDepth,
+					maxCrawlPages: parsed.maxCrawlPages,
+					maxCharsPerPage: parsed.maxCharsPerPage,
+					useSitemaps: parsed.useSitemaps,
+					ignoreRobots: parsed.ignoreRobots,
+					dropAllQuery: parsed.dropAllQuery,
+					renderJavascript: parsed.renderJavascript,
+					urlsToIgnore: parsed.urlsToIgnore,
+					entityType: parsed.entityType,
+					entityId: parsed.entityId,
+				},
+			})
+			.returning({ id: crawlSettings.id });
 
-				return {
-					ok: true as const,
-					crawlSettingId: crawlSetting.id,
-				};
-			} else {
-				const crawlSettingId = await tx
-					.select({
-						id: crawlSettings.id,
-					})
-					.from(crawlSettings)
-					.where(eq(crawlSettings.domain, parsed.domain));
-
-				return {
-					ok: true as const,
-					crawlSettingId: crawlSettingId[0].id,
-				};
-			}
-		});
+		return {
+			ok: true as const,
+			id: crawlSetting.id,
+		};
 	} catch (error) {
 		return {
 			ok: false as const,
@@ -59,3 +59,15 @@ export const upsertCrawlSettings = async (input: unknown, updateCrawlSetting: bo
 	}
 };
 
+export async function updateCrawlSettingsDomain(id: string, url: string) {
+	await db
+		.update(crawlSettings)
+		.set({ domain: getDomain(url) })
+		.where(eq(crawlSettings.entityId, id));
+}
+
+export async function getCrawlSettings(id: string) {
+	const [settings] = await db.select().from(crawlSettings).where(eq(crawlSettings.id, id));
+
+	return settings;
+}
