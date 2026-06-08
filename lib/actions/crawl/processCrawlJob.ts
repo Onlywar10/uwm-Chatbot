@@ -1,31 +1,21 @@
 "use server";
 
-import { claimCrawlJob, updateCrawlJobError, updateCrawlJobSuccess } from "./crawlJobs";
-import { publishCrawlJob } from "./publish";
-
-import { extractTextFromPdf } from "../pdf";
-import { upsertResource } from "../resources";
-
+import type { FlowControl } from "@upstash/qstash";
+import type { RobotsRules } from "@/lib/types/crawl";
 import { canonicalizeUrl } from "@/lib/ai/url";
-
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
-import { extractTextFromGoogleDoc } from "../googleDocs";
-
-const verbose = process.env.NODE_ENV !== "production";
-
-type CrawlSettings = {
-	maxDepth: number;
-	maxPages: number;
-	maxCharsPerPage: number;
-	includeSitemapSeeds: boolean;
-	ignoreRobots: boolean;
-	dropAllQuery: boolean;
-	urlsToIgnore: string[];
-	domain: string;
-};
-
-type RobotsRules = { allow: string[]; disallow: string[]; crawlDelay: number };
+import {
+	claimCrawlJob,
+	getCrawlJobData,
+	updateCrawlJobError,
+	updateCrawlJobSuccess,
+} from "./crawlJobs";
+import { getFlowControl, publishCrawlJob } from "./publish";
+import { generateCrawlSettingSnapshot, verbose } from "./utils";
+import { processPage } from "./handlers/handler";
+import { extractSchoolDirectory } from "./handlers/html";
+import { renderHtml } from "./render";
+import { upsertResource } from "../resources";
+import { log } from "../logger";
 
 const pathAllowed = (path: string, rules: RobotsRules): boolean => {
 	const matchLen = (pattern: string) => (pattern && path.startsWith(pattern) ? pattern.length : -1);
@@ -41,25 +31,6 @@ const pathAllowed = (path: string, rules: RobotsRules): boolean => {
 	return allowLen >= disallowLen;
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const getFileTypeFromGoogleDrive = async (url: string): Promise<string> => {
-	const response = await fetch(url, { method: "HEAD" });
-	const contentDisposition = response.headers.get("content-disposition");
-
-	if (contentDisposition) {
-		const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n]*)\1/);
-
-		if (filenameMatch?.[2]) {
-			const filename = decodeURIComponent(filenameMatch[2]);
-			const extension = filename.split(".").pop()?.toLowerCase();
-			if (extension) return extension;
-		}
-	}
-
-	return "";
-};
-
 const absolutize = (base: string, href: string): URL | null => {
 	try {
 		return new URL(href, `https://${base}/`);
@@ -68,186 +39,11 @@ const absolutize = (base: string, href: string): URL | null => {
 	}
 };
 
-const processPdf = async (
-	key: string,
-	maxCharsPerPage: number,
-	domain: string,
-	crawlSettingId: string,
-	schoolId: string,
-) => {
-	const response = await extractTextFromPdf(key);
-
-	if (!response.ok) {
-		return { ok: false as const, error: response.error };
-	}
-
-	const contentText = response.text.slice(0, maxCharsPerPage).replaceAll(/\s+/g, " ").trim();
-
-	if (contentText.length > 0) {
-		const result = await upsertResource({
-			domain,
-			url: key,
-			content: contentText,
-			crawlSettingId,
-			schoolId: schoolId,
-		});
-
-		if (result.ok) {
-			return { ok: true as const, resourceId: result.resourceId };
-		} else {
-			return { ok: false as const, error: `Failed to upsert ${key}: ${result.error}` };
-		}
-	} else {
-		return {
-			ok: false as const,
-			error: "Parsed content has invalid length",
-		};
-	}
-};
-
-const processGoogleDrive = async (
-	key: string,
-	maxCharsPerPage: number,
-	domain: string,
-	crawlSettingId: string,
-	schoolId: string,
-) => {
-	const match = key.match(/\/file\/d\/([^/]+)/);
-
-	if (match) {
-		const directUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
-		const fileType = await getFileTypeFromGoogleDrive(directUrl);
-
-		if (fileType === "pdf") {
-			const response = await extractTextFromPdf(directUrl);
-
-			if (!response.ok) {
-				return { ok: false as const, error: `${key} ${response.error}` };
-			}
-
-			const contentText = response.text.slice(0, maxCharsPerPage).replaceAll(/\s+/g, " ").trim();
-
-			if (contentText.length > 0) {
-				const result = await upsertResource({
-					domain,
-					url: key,
-					content: contentText,
-					crawlSettingId,
-					schoolId: schoolId,
-				});
-
-				if (result.ok) {
-					return { ok: true as const, resourceId: result.resourceId };
-				} else {
-					return { ok: false as const, error: `Failed to upsert ${key}: ${result.error}` };
-				}
-			} else {
-				return { ok: false as const, error: `Invalid text content length for ${key}` };
-			}
-		} else {
-			return { ok: false as const, error: `Google drive link: ${key} not in PDF format.` };
-		}
-	} else {
-		return { ok: false as const, error: `Google drive ID not found in ${key}.` };
-	}
-};
-
-const processGoogleDoc = async (
-	key: string,
-	maxCharsPerPage: number,
-	domain: string,
-	crawlSettingId: string,
-	schoolId: string,
-) => {
-	const match = key.match(/\/document\/d\/([^/]+)/);
-
-	if (match) {
-		const directUrl = `https://docs.google.com/document/d/${match[1]}/export?format=txt`;
-		const response = await extractTextFromGoogleDoc(directUrl);
-
-		if (!response.ok) {
-			throw new Error(response.error);
-		}
-
-		const contentText = response.text.slice(0, maxCharsPerPage).replaceAll(/\s+/g, " ").trim();
-
-		if (response.text.length > 0) {
-			const result = await upsertResource({
-				domain,
-				url: key,
-				content: contentText,
-				crawlSettingId,
-				schoolId: schoolId,
-			});
-
-			if (result.ok) {
-				return { ok: true as const, resourceId: result.resourceId };
-			} else {
-				return { ok: false as const, error: `Failed to upsert ${key}: ${result.error}` };
-			}
-		} else {
-			return { ok: false as const, error: `Invalid text content length for ${key}` };
-		}
-	} else {
-		return { ok: false as const, error: `Google document ID not found in ${key}.` };
-	}
-};
-
-const extractTextFromHtml = (html: string, url: string): string => {
-	try {
-		const dom = new JSDOM(html, { url });
-		const reader = new Readability(dom.window.document);
-		const article = reader.parse();
-		const text = (article?.textContent ?? "").trim();
-		if (text.length > 0) return text;
-	} catch {}
-
-	const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-	const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, "");
-	const text = withoutStyles.replace(/<[^>]+>/g, " ");
-	return text.replace(/\s+/g, " ").trim();
-};
-
-const processHtml = async (
-	key: string,
-	response: Response,
-	maxCharsPerPage: number,
-	domain: string,
-	crawlSettingId: string,
-	schoolId: string,
-) => {
-	const html = await response.text();
-	let contentText = "";
-
-	const dom = new JSDOM(html, { url: key });
-	const reader = new Readability(dom.window.document);
-	const article = reader.parse();
-
-	contentText += (article?.textContent ?? extractTextFromHtml(html, key))
-		.slice(0, maxCharsPerPage)
-		.replaceAll(/\s+/g, " ")
-		.trim();
-
-	if (contentText.length > 0) {
-		const result = await upsertResource({
-			domain,
-			url: key,
-			content: contentText,
-			crawlSettingId,
-			schoolId: schoolId,
-		});
-
-		if (result.ok) {
-			return { ok: true as const, resourceId: result.resourceId, html: html };
-		} else {
-			return { ok: false as const, error: `Failed to upsert ${key}: ${result.error}` };
-		}
-	} else {
-		return { ok: false as const, error: `Invalid text content length for ${key}` };
-	}
-};
-
-const extractLinks = (baseUrl: string, html: string, opts: { dropAllQuery: boolean }): URL[] => {
+const extractLinks = (
+	baseUrl: string,
+	html: string,
+	opts: { dropAllQuery: boolean; followCatapultAliases: boolean },
+): URL[] => {
 	const hrefs = Array.from(
 		html.matchAll(/<a\s+(?:[^>]*?\s+)?href\s*=\s*["']([^"']+)["'](?:\s+[^>]*)?>/gi),
 	)
@@ -258,7 +54,18 @@ const extractLinks = (baseUrl: string, html: string, opts: { dropAllQuery: boole
 		.map((href) => absolutize(baseUrl, href))
 		.filter((url): url is URL => !!url)
 		.filter((url) => url.protocol.startsWith("http"))
-		.filter((url) => !url.pathname.includes("__catapult_pages"))
+		// Don't queue media/binary assets (videos, images, archives). PDFs are
+		// kept — they have a dedicated handler.
+		.filter(
+			(url) =>
+				!/\.(mp4|m4v|mov|avi|wmv|mkv|webm|mp3|wav|m4a|ogg|jpe?g|png|gif|svg|webp|ico|zip|rar|7z|gz)$/i.test(
+					url.pathname,
+				),
+		)
+		// __catapult_pages are global-link aliases that 302 to real pages. Follow
+		// them only when there's no sitemap; otherwise the sitemap already covers
+		// the site and the aliases are redundant.
+		.filter((url) => opts.followCatapultAliases || !url.pathname.includes("__catapult_pages"))
 		.map((url) => canonicalizeUrl(url, { dropAllQuery: opts.dropAllQuery }));
 
 	const seen = new Set<string>();
@@ -273,153 +80,189 @@ const extractLinks = (baseUrl: string, html: string, opts: { dropAllQuery: boole
 	return unique;
 };
 
-const getFlowControl = async (
-	link: string,
-	crawlSetting: string,
-): Promise<{ key: string; parallelism: number; rate: number; period: `${bigint}m` }> => {
-	if (link.startsWith("https://drive.google.com/file/d/") || link.endsWith(".pdf")) {
-		return { key: `${crawlSetting}-pdf`, parallelism: 2, rate: 30, period: "1m" as `${bigint}m` };
-	} else if (link.startsWith("https://docs.google.com/document/d/")) {
-		return { key: `${crawlSetting}-docs`, parallelism: 5, rate: 50, period: "1m" };
-	} else {
-		return { key: `${crawlSetting}-html`, parallelism: 10, rate: 100, period: "1m" };
-	}
-};
+export async function processCrawlJob(crawlJobId: string) {
+	const crawlData = await getCrawlJobData(crawlJobId);
 
-export async function processCrawlJob(
-	crawlSettings: CrawlSettings,
-	crawlSettingId: string,
-	crawlJobId: string,
-	schoolId: string,
-	url: string,
-	domain: string,
-	depth: number,
-	robots: RobotsRules,
-	crawlDelay: number,
-) {
+	if (!crawlData.ok) {
+		if (verbose) console.warn(crawlData.error);
+
+		await log({
+			level: "error",
+			source: "crawler",
+			message: "Failed to load crawl job data",
+			metadata: { crawlJobId, error: crawlData.error },
+		});
+
+		throw new Error(crawlData.error);
+	}
+
+	const { crawlSettings, url, depth, crawlRunId, robots, crawlDelay, jobType, usedSitemap } =
+		crawlData.crawlData;
+
+	const settingsSnapshot = generateCrawlSettingSnapshot(crawlSettings);
+
 	const start = performance.now();
 
 	const urlObj = new URL(url);
 	let key = urlObj.href;
 
-	if (!crawlSettings.ignoreRobots && !pathAllowed(urlObj.pathname, robots)) {
+	if (!crawlSettings.ignoreRobots && robots && !pathAllowed(urlObj.pathname, robots)) {
 		if (verbose) console.log(`Skipping disallowed URL: ${key}`);
-		await updateCrawlJobError({ crawlJobId: crawlJobId, errorMessage: "Skipped disallowed URL" });
+
+		await log({
+			level: "info",
+			source: "crawler",
+			message: "Skipping robots-disallowed URL",
+			metadata: { url: key, crawlJobId },
+			crawlRunId,
+		});
+
+		await updateCrawlJobError({
+			crawlJobId: crawlJobId,
+			errorMessage: "Skipped disallowed URL",
+			crawlRunId: crawlRunId,
+		});
 		return;
 	}
 
-	if (crawlDelay > 0) await sleep(crawlDelay * 1000);
-
 	try {
-		const response = await fetch(key, { cache: "no-store" });
+		let response = await fetch(key, { cache: "no-store" });
 		if (verbose) console.log(`Crawling ${key} (depth: ${depth}) - ${response.status}`);
 		if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-		let html = "";
+		key = response.url;
 
-		if (key.startsWith("https://tinyurl.com/")) {
-			const response = await fetch(key, {
-				redirect: "follow",
+		// PDFs and Google Docs/Drive are handled by their own parsers; everything
+		// else is treated as an HTML page (which is what gets rendered).
+		const contentType = response.headers.get("content-type") ?? "";
+		const isPdf = contentType.includes("application/pdf") || key.endsWith(".pdf");
+		const isGoogleDoc =
+			key.startsWith("https://drive.google.com/file/d/") ||
+			key.startsWith("https://docs.google.com/document/d/");
+		const isHtmlPage = !isPdf && !isGoogleDoc;
+
+		// Skip binary assets (video, audio, images, archives, ...): there's nothing
+		// to extract, and they must not be rendered or parsed as HTML.
+		if (
+			isHtmlPage &&
+			contentType !== "" &&
+			!contentType.includes("text/html") &&
+			!contentType.includes("xhtml")
+		) {
+			await updateCrawlJobError({
+				crawlJobId,
+				errorMessage: `Skipped non-HTML content (${contentType})`,
+				crawlRunId,
 			});
-
-			key = response.url;
+			return;
 		}
 
-		if (key.endsWith(".pdf")) {
-			const result = await processPdf(
-				key,
-				crawlSettings.maxCharsPerPage,
-				domain,
-				crawlSettingId,
-				schoolId,
-			);
-
-			if (result.ok) {
-				const stop = performance.now();
-
-				await updateCrawlJobSuccess({
-					crawlJobId: crawlJobId,
-					fileType: "pdf",
-					resourceId: result.resourceId,
-					time: Number(((stop - start) / 1000).toFixed(2)),
-				});
-			} else {
-				if (verbose) console.warn(result.error);
-				throw new Error(result.error);
-			}
-		} else if (key.startsWith("https://drive.google.com/file/d/")) {
-			const result = await processGoogleDrive(
-				key,
-				crawlSettings.maxCharsPerPage,
-				domain,
-				crawlSettingId,
-				schoolId,
-			);
-
-			if (result.ok) {
-				const stop = performance.now();
-
-				await updateCrawlJobSuccess({
-					crawlJobId: crawlJobId,
-					fileType: "pdf",
-					resourceId: result.resourceId,
-					time: Number(((stop - start) / 1000).toFixed(2)),
-				});
-			} else {
-				if (verbose) console.warn(result.error);
-				throw new Error(result.error);
-			}
-		} else if (key.startsWith("https://docs.google.com/document/d/")) {
-			const result = await processGoogleDoc(
-				key,
-				crawlSettings.maxCharsPerPage,
-				domain,
-				crawlSettingId,
-				schoolId,
-			);
-
-			if (result.ok) {
-				const stop = performance.now();
-
-				await updateCrawlJobSuccess({
-					crawlJobId: crawlJobId,
-					fileType: "doc",
-					resourceId: result.resourceId,
-					time: Number(((stop - start) / 1000).toFixed(2)),
-				});
-			} else {
-				if (verbose) console.warn(result.error);
-				throw new Error(result.error);
-			}
-		} else {
-			const result = await processHtml(
-				key,
-				response,
-				crawlSettings.maxCharsPerPage,
-				domain,
-				crawlSettingId,
-				schoolId,
-			);
-
-			if (result.ok) {
-				const stop = performance.now();
-
-				await updateCrawlJobSuccess({
-					crawlJobId: crawlJobId,
-					fileType: "html",
-					resourceId: result.resourceId,
-					time: Number(((stop - start) / 1000).toFixed(2)),
-				});
-			} else {
-				if (verbose) console.warn(result.error);
-				throw new Error(result.error);
-			}
-
-			html = result.html;
+		// If the request redirected to a different host and it isn't a document we
+		// handle cross-host (PDF / Google Doc / Drive), skip it. This covers CMS
+		// shortcut links that redirect off-site (e.g. /AuroraPRIDE -> a Google Form)
+		// and off-site __catapult_pages global-link aliases — we don't want external
+		// content saved under this site's resources.
+		if (isHtmlPage && new URL(key).hostname.toLowerCase() !== urlObj.hostname.toLowerCase()) {
+			await updateCrawlJobError({
+				crawlJobId,
+				errorMessage: "Skipped off-site redirect",
+				crawlRunId,
+			});
+			return;
 		}
 
-		if (depth < crawlSettings.maxDepth && html) {
-			const links = extractLinks(domain, html, { dropAllQuery: crawlSettings.dropAllQuery }).filter(
+		// When JS rendering is enabled, replace the raw HTML with browser-rendered
+		// HTML so both content extraction and link discovery see JS-injected DOM.
+		let renderedHtml: string | null = null;
+		if (isHtmlPage && crawlSettings.renderJavascript) {
+			try {
+				renderedHtml = await renderHtml(key);
+				response = new Response(renderedHtml, {
+					headers: { "content-type": "text/html; charset=utf-8" },
+				});
+			} catch (error) {
+				await log({
+					level: "warn",
+					source: "crawler",
+					message: "Renderer failed, falling back to static fetch",
+					metadata: {
+						url: key,
+						crawlJobId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+					crawlRunId,
+				});
+			}
+		}
+
+		const result = await processPage(
+			key,
+			response.clone(),
+			crawlSettings.entityId,
+			crawlSettings.maxCharsPerPage,
+			crawlSettings.domain,
+			crawlSettings.id,
+		);
+
+		if (!result.ok) throw new Error(result.error);
+
+		if (result.fileType !== "html") {
+			const stop = performance.now();
+
+			await updateCrawlJobSuccess(crawlJobId, crawlRunId, {
+				fileType: result.fileType,
+				resourceId: result.resourceId,
+				time: Number(((stop - start) / 1000).toFixed(2)),
+				contentSnapshot: result.contentSnapshot,
+			});
+		}
+
+		const html = renderedHtml ?? (await response.text());
+
+		// Embed the district school directory once: it's identical on every page,
+		// so upsertResource's content-hash dedup means only the first occurrence
+		// per crawl actually re-embeds. Kept out of per-page content to avoid
+		// duplicating it across every page's embeddings.
+		if (result.fileType === "html") {
+			try {
+				const directoryMd = extractSchoolDirectory(html);
+				if (directoryMd) {
+					await upsertResource({
+						domain: crawlSettings.domain,
+						url: `https://${urlObj.hostname}/__directory`,
+						entityId: crawlSettings.entityId,
+						content: directoryMd,
+						crawlSettingId: crawlSettings.id,
+						pageTitle: "School Directory",
+						file_type: "html",
+						categories: {
+							topCategory: "Schools",
+							subCategory: "",
+							pageCategory: "Directory",
+							fullPath: "Schools > Directory",
+						},
+					});
+				}
+			} catch (error) {
+				await log({
+					level: "warn",
+					source: "crawler",
+					message: "Failed to upsert school directory",
+					metadata: {
+						url: key,
+						crawlJobId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+					crawlRunId,
+				});
+			}
+		}
+
+		if (jobType === "crawl" && depth < crawlSettings.maxCrawlDepth) {
+			const links = extractLinks(crawlSettings.domain, html, {
+				dropAllQuery: crawlSettings.dropAllQuery,
+				followCatapultAliases: !usedSitemap,
+			}).filter(
 				(u) =>
 					(u.hostname.toLowerCase() === urlObj.hostname ||
 						u.href.startsWith("https://drive.google.com/file/d/") ||
@@ -429,52 +272,71 @@ export async function processCrawlJob(
 					!crawlSettings.urlsToIgnore.includes(u.href),
 			);
 
+			const jobsToPublish: { crawlJobId: string; flowControl: FlowControl }[] = [];
+
 			for (const link of links) {
-				const crawlJob = await claimCrawlJob({ url: link.href, depth: depth + 1, crawlSettingId });
+				const crawlJob = await claimCrawlJob({
+					url: link.href,
+					depth: depth + 1,
+					crawlSettingId: crawlSettings.id,
+					crawlRunId: crawlRunId,
+					settingsSnapshot,
+				});
+
 				if (!crawlJob.ok) {
 					if (crawlJob.reason === "duplicate") continue;
 					else if (crawlJob.reason === "max_pages") break;
 					else {
 						if (verbose) console.log(crawlJob.reason);
+
+						await log({
+							level: "warn",
+							source: "crawler",
+							message: "Unexpected claim crawl job failure",
+							metadata: { reason: crawlJob.reason, url: link.href, crawlJobId },
+							crawlRunId,
+						});
 						break;
 					}
 				}
 
-				const crawlJobId = crawlJob.id;
+				const flowControl = getFlowControl(link.href, crawlSettings.id);
 
-				const flowControl = await getFlowControl(link.href, crawlSettingId);
-
-				await publishCrawlJob(
-					domain,
-					link.href,
-					schoolId,
-					depth + 1,
-					crawlDelay,
-					robots,
-					crawlSettingId,
-					crawlJobId,
-					{
-						maxDepth: crawlSettings.maxDepth,
-						maxPages: crawlSettings.maxPages,
-						maxCharsPerPage: crawlSettings.maxCharsPerPage,
-						ignoreRobots: crawlSettings.ignoreRobots,
-						dropAllQuery: crawlSettings.dropAllQuery,
-						urlsToIgnore: crawlSettings.urlsToIgnore,
-						domain: domain,
-					},
-					flowControl,
-				);
+				jobsToPublish.push({ crawlJobId: crawlJob.id, flowControl });
 			}
-		}
-	} catch (error) {
-		if (verbose)
-			console.warn(
-				`Error processing ${key}: ${error instanceof Error ? error.message : "Unknown error"}`,
+
+			await Promise.all(
+				jobsToPublish.map((j) => publishCrawlJob(j.crawlJobId, j.flowControl, crawlDelay)),
 			);
+		}
+
+		const stop = performance.now();
+
+		await updateCrawlJobSuccess(crawlJobId, crawlRunId, {
+			fileType: "html",
+			resourceId: result.resourceId,
+			time: Number(((stop - start) / 1000).toFixed(2)),
+			contentSnapshot: result.contentSnapshot,
+		});
+	} catch (error) {
+		await log({
+			level: "error",
+			source: "crawler",
+			message: "Crawl job failed",
+			metadata: {
+				url: key,
+				crawlJobId,
+				error: error instanceof Error ? error.message : "Unknown error",
+			},
+			crawlRunId,
+		});
+
 		await updateCrawlJobError({
 			crawlJobId: crawlJobId,
 			errorMessage: error instanceof Error ? error.message : "Unknown error",
+			crawlRunId: crawlRunId,
 		});
+
 		return;
 	}
 }
