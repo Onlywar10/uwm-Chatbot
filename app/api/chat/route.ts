@@ -10,7 +10,8 @@ import { z } from "zod";
 export const maxDuration = 30;
 
 const chatModel = "openai/gpt-4o-mini";
-const TOP_K = 4;
+// Max retrieved chunks surfaced to the model after cross-query dedup.
+const TOP_K = 8;
 
 const ALLOWED_ORIGINS = new Set([
 	"https://www.unitedwaymerced.org",
@@ -34,7 +35,7 @@ export async function OPTIONS(req: Request) {
 	return new Response(null, { status: 204, headers: getCorsHeaders(req) });
 }
 
-type RetrievalHit = { name: string; similarity: number };
+type RetrievalHit = { name: string; similarity: number; sourceUrl?: string };
 
 function getDomainFromRequest(req: Request): string | null {
 	let devOverride = "";
@@ -158,18 +159,21 @@ export async function POST(req: Request) {
 			: unique
 					.map(
 						(hit: RetrievalHit, i: number) =>
-							`[#${i + 1} score=${hit.similarity.toFixed(3)}]\n${hit.name}`,
+							`[#${i + 1} score=${hit.similarity.toFixed(3)}]\n` +
+							`${hit.sourceUrl ? `[Source: ${hit.sourceUrl}]\n` : ""}${hit.name}`,
 					)
 					.join("\n\n---\n\n");
 
-	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced.
+	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced and the 211 Merced community resource directory.
 
-    Rules:
-    - Use the Context below to anwser a user's question to the best of your ability.
-	- If all Context is irrevelvent to the user's question respond with Sorry I dont Know
-    Context:
-    ${context || "(empty)"}
-    `;
+Rules:
+- Answer the user's question using ONLY the Context below. Do not use outside knowledge and do not guess.
+- If the Context does not answer the question, START your reply with "Sorry," and briefly say what you could not find. Reserve a leading "Sorry," only for these no-answer cases, never as polite filler.
+- When helpful, point the user to the source link for the information you used.
+
+Context:
+${context || "(empty)"}
+`;
 
 	const turnId = nanoid();
 	const startLlm = performance.now();
@@ -188,7 +192,7 @@ export async function POST(req: Request) {
 				id: turnId,
 				timestamp: new Date(),
 				domain,
-				status: text.includes("Sorry, I don't know") ? "no-answer" : "answered",
+				status: text.trimStart().startsWith("Sorry,") ? "no-answer" : "answered",
 				latency: {
 					total: Math.round(endTotal - startTotal),
 					queryGen: Math.round(endQueryGen - startQueryGen),
