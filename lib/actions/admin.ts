@@ -9,6 +9,8 @@ import { crawlSettings } from "../db/schema/crawlSettings";
 import { and, eq, sql } from "drizzle-orm";
 
 import { requireAuth } from "@/lib/auth/guards";
+import { upsertCrawlSettings } from "./crawl/crawlSettings";
+import { startCrawl, startRecrawl } from "./crawl/start";
 
 export async function getDomainStats() {
 	await requireAuth();
@@ -21,7 +23,7 @@ export async function getDomainStats() {
 		})
 		.from(resources)
 		.groupBy(resources.domain, schools.name)
-		.innerJoin(schools, eq(resources.schoolId, schools.id));
+		.innerJoin(schools, eq(resources.entityId, schools.id));
 
 	const embeddingSummary = await db
 		.select({ domain: embeddings.domain, embeddingCount: sql<number>`count(*)` })
@@ -60,12 +62,14 @@ export async function getDomainDetails(domain: string) {
 export async function getCrawlSettings(domain: string) {
 	return db
 		.select({
+			id: crawlSettings.id,
 			maxDepth: crawlSettings.maxCrawlDepth,
 			maxPages: crawlSettings.maxCrawlPages,
 			maxCharsPerPage: crawlSettings.maxCharsPerPage,
 			includeSitemapSeeds: crawlSettings.useSitemaps,
 			ignoreRobots: crawlSettings.ignoreRobots,
 			dropAllQuery: crawlSettings.dropAllQuery,
+			renderJavascript: crawlSettings.renderJavascript,
 			urlsToIgnore: crawlSettings.urlsToIgnore,
 		})
 		.from(crawlSettings)
@@ -87,8 +91,8 @@ export async function reCrawlDomain(params: {
 	includeSitemapSeeds: boolean;
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
+	renderJavascript: boolean;
 	urlsToIgnore: string[];
-	saveCrawlSettings: boolean;
 	schoolId: string;
 }) {
 	await requireAuth();
@@ -101,6 +105,7 @@ export async function reCrawlDomain(params: {
 		includeSitemapSeeds,
 		ignoreRobots,
 		dropAllQuery,
+		renderJavascript,
 		urlsToIgnore,
 		schoolId,
 	} = params;
@@ -118,59 +123,52 @@ export async function reCrawlDomain(params: {
 		if (!seed) throw new Error(`No seed URL found for domain ${domain}`);
 	}
 
-	const { crawlSite } = await import("./crawl/crawl");
-	return crawlSite(
-		{
-			url: seed,
-			maxDepth,
-			maxPages,
-			maxCharsPerPage,
-			dropAllQuery,
-			includeSitemapSeeds,
-			ignoreRobots,
-			urlsToIgnore,
-			schoolId,
-		},
-		params.saveCrawlSettings,
-	);
+	// Persist settings (the distributed crawl reads its config from the
+	// crawl_settings row via crawlSettingId), then enqueue the crawl.
+	const settings = await upsertCrawlSettings({
+		domain,
+		maxCrawlDepth: maxDepth,
+		maxCrawlPages: maxPages,
+		maxCharsPerPage,
+		useSitemaps: includeSitemapSeeds,
+		ignoreRobots,
+		dropAllQuery,
+		renderJavascript,
+		urlsToIgnore,
+		entityType: "school",
+		entityId: schoolId,
+	});
+	if (!settings.ok) throw new Error(settings.error);
+
+	const result = await startCrawl(seed, "school", schoolId, settings.id);
+	if (!result.ok) throw new Error(result.error);
+
+	return { message: `Crawl started for ${domain}. Pages will be indexed in the background.` };
 }
 
 export async function reIndexPage(params: {
 	domain: string;
 	url: string;
-	maxCharsPerPage: number;
-	includeSitemapSeeds: boolean;
-	ignoreRobots: boolean;
-	dropAllQuery: boolean;
 	schoolId: string;
 }) {
 	await requireAuth();
-	const {
-		domain,
-		url,
-		maxCharsPerPage,
-		includeSitemapSeeds,
-		ignoreRobots,
-		dropAllQuery,
-		schoolId,
-	} = params;
+	const { domain, url } = params;
 
+	const [settings] = await db
+		.select({ id: crawlSettings.id })
+		.from(crawlSettings)
+		.where(eq(crawlSettings.domain, domain));
+
+	if (!settings) throw new Error(`No crawl settings found for domain ${domain}`);
+
+	// Drop the existing resource so the recrawl re-embeds it even if content
+	// is unchanged (content-hash dedup would otherwise skip it).
 	await db.delete(resources).where(and(eq(resources.domain, domain), eq(resources.url, url)));
 
-	const { crawlSite } = await import("./crawl/crawl");
-	return crawlSite(
-		{
-			url,
-			maxCharsPerPage,
-			includeSitemapSeeds,
-			ignoreRobots,
-			dropAllQuery,
-			maxDepth: 0,
-			maxPages: 1,
-			schoolId,
-		},
-		false,
-	);
+	const result = await startRecrawl([url], url, settings.id);
+	if (!result.ok) throw new Error(result.error);
+
+	return { message: `Reindex started for ${url}. It will update in the background.` };
 }
 
 export async function getDistricts() {
