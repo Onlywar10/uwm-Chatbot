@@ -17,10 +17,10 @@ export async function clearCrawlData(entityId: string) {
 	try {
 		await requireRole("admin");
 
-		const deleteResourcesQuery = db.delete(resources).where(eq(resources.entityId, entityId));
-		const deleteCrawlRunsQuery = db.delete(crawlRuns).where(eq(crawlRuns.entityId, entityId));
-
-		await db.batch([deleteResourcesQuery, deleteCrawlRunsQuery]);
+		await db.transaction(async (tx) => {
+			await tx.delete(resources).where(eq(resources.entityId, entityId));
+			await tx.delete(crawlRuns).where(eq(crawlRuns.entityId, entityId));
+		});
 
 		return { ok: true as const };
 	} catch (error) {

@@ -104,40 +104,37 @@ export const upsertResource = async (input: unknown) => {
 				resourceId,
 			}));
 
-			const insertResourceQuery = db.insert(resources).values({
-				id: resourceId,
-				domain,
-				url: cleanedUrl,
-				entityId,
-				content,
-				contentHash,
-				crawlSettingId,
+			await db.transaction(async (tx) => {
+				if (resource) {
+					await tx
+						.update(resources)
+						.set({ content, contentHash })
+						.where(eq(resources.id, resourceId));
+				} else {
+					await tx.insert(resources).values({
+						id: resourceId,
+						domain,
+						url: cleanedUrl,
+						entityId,
+						content,
+						contentHash,
+						crawlSettingId,
+					});
+				}
+
+				await tx.delete(parentChunks).where(eq(parentChunks.resourceId, resourceId));
+
+				await tx
+					.delete(embeddingsTable)
+					.where(
+						and(eq(embeddingsTable.resourceId, resourceId), eq(embeddingsTable.domain, domain)),
+					);
+
+				// Parent chunks must exist before child embeddings (FK parent_id).
+				await tx.insert(parentChunks).values(parents);
+
+				await tx.insert(embeddingsTable).values(embeddings);
 			});
-
-			const updateResourceQuery = db
-				.update(resources)
-				.set({ content, contentHash })
-				.where(eq(resources.id, resourceId));
-
-			const deleteParentChunksQuery = db
-				.delete(parentChunks)
-				.where(eq(parentChunks.resourceId, resourceId));
-
-			const insertParentChunksQuery = db.insert(parentChunks).values(parents);
-
-			const deleteEmbeddingsQuery = db
-				.delete(embeddingsTable)
-				.where(and(eq(embeddingsTable.resourceId, resourceId), eq(embeddingsTable.domain, domain)));
-
-			const insertChildEmbeddingsQuery = db.insert(embeddingsTable).values(embeddings);
-
-			await db.batch([
-				resource ? updateResourceQuery : insertResourceQuery,
-				deleteParentChunksQuery,
-				deleteEmbeddingsQuery,
-				insertParentChunksQuery,
-				insertChildEmbeddingsQuery,
-			]);
 
 			return {
 				ok: true as const,
@@ -225,40 +222,37 @@ export const upsertPdfResource = async (input: unknown) => {
 				resourceId,
 			}));
 
-			const insertResourceQuery = db.insert(resources).values({
-				id: resourceId,
-				domain,
-				url: cleanedUrl,
-				entityId,
-				content,
-				contentHash,
-				crawlSettingId,
+			await db.transaction(async (tx) => {
+				if (resource) {
+					await tx
+						.update(resources)
+						.set({ content, contentHash })
+						.where(eq(resources.id, resourceId));
+				} else {
+					await tx.insert(resources).values({
+						id: resourceId,
+						domain,
+						url: cleanedUrl,
+						entityId,
+						content,
+						contentHash,
+						crawlSettingId,
+					});
+				}
+
+				await tx.delete(parentChunks).where(eq(parentChunks.resourceId, resourceId));
+
+				await tx
+					.delete(embeddingsTable)
+					.where(
+						and(eq(embeddingsTable.resourceId, resourceId), eq(embeddingsTable.domain, domain)),
+					);
+
+				// Parent chunks must exist before child embeddings (FK parent_id).
+				await tx.insert(parentChunks).values(parents);
+
+				await tx.insert(embeddingsTable).values(embeddings);
 			});
-
-			const updateResourceQuery = db
-				.update(resources)
-				.set({ content, contentHash })
-				.where(eq(resources.id, resourceId));
-
-			const deleteParentChunksQuery = db
-				.delete(parentChunks)
-				.where(eq(parentChunks.resourceId, resourceId));
-
-			const insertParentChunksQuery = db.insert(parentChunks).values(parents);
-
-			const deleteEmbeddingsQuery = db
-				.delete(embeddingsTable)
-				.where(and(eq(embeddingsTable.resourceId, resourceId), eq(embeddingsTable.domain, domain)));
-
-			const insertChildEmbeddingsQuery = db.insert(embeddingsTable).values(embeddings);
-
-			await db.batch([
-				resource ? updateResourceQuery : insertResourceQuery,
-				deleteParentChunksQuery,
-				deleteEmbeddingsQuery,
-				insertParentChunksQuery,
-				insertChildEmbeddingsQuery,
-			]);
 
 			return {
 				ok: true as const,

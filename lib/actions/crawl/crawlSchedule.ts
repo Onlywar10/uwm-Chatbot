@@ -214,25 +214,25 @@ export async function updateCrawlScheduleState(crawlSettingId: string, input: un
 }
 
 export async function updateCrawlScheduleSuccess(crawlSettingId: string) {
-	const updateSuccessQuery = db
-		.update(crawlSchedule)
-		.set({
-			status: "success",
-		})
-		.where(eq(crawlSchedule.crawlSettingId, crawlSettingId));
+	await db.transaction(async (tx) => {
+		await tx
+			.update(crawlSchedule)
+			.set({
+				status: "success",
+			})
+			.where(eq(crawlSchedule.crawlSettingId, crawlSettingId));
 
-	const updateTimeQuery = db
-		.update(crawlSchedule)
-		.set({
-			lastCrawlAt: sql`now()`,
-			nextCrawlAt: sql`now() + (${crawlSchedule.interval} * interval '1 hour')`,
-		})
-		.where(
-			and(
-				eq(crawlSchedule.crawlSettingId, crawlSettingId),
-				eq(crawlSchedule.lastCrawlMethod, "automatic"),
-			),
-		);
-
-	await db.batch([updateSuccessQuery, updateTimeQuery]);
+		await tx
+			.update(crawlSchedule)
+			.set({
+				lastCrawlAt: sql`now()`,
+				nextCrawlAt: sql`now() + (${crawlSchedule.interval} * interval '1 hour')`,
+			})
+			.where(
+				and(
+					eq(crawlSchedule.crawlSettingId, crawlSettingId),
+					eq(crawlSchedule.lastCrawlMethod, "automatic"),
+				),
+			);
+	});
 }
