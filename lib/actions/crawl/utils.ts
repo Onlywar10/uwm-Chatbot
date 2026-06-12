@@ -11,6 +11,7 @@ export function generateCrawlSettingSnapshot(crawlSettings: CrawlSettings) {
 		ignoreRobots: crawlSettings.ignoreRobots,
 		dropAllQuery: crawlSettings.dropAllQuery,
 		renderJavascript: crawlSettings.renderJavascript,
+		crawlAllPages: crawlSettings.crawlAllPages,
 		urlsToIgnore: crawlSettings.urlsToIgnore,
 	};
 }

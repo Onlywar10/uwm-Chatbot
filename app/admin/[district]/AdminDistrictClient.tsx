@@ -43,6 +43,7 @@ export default function AdminDistrictClient({
 	const [ignoreRobots, setIgnoreRobots] = useState(true);
 	const [dropAllQuery, setDropAllQuery] = useState(true);
 	const [renderJavascript, setRenderJavascript] = useState(false);
+	const [crawlAllPages, setCrawlAllPages] = useState(false);
 	const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_CRAWL_OPTIONS.maxDepth);
 	const [maxPages, setMaxPages] = useState<number>(DEFAULT_CRAWL_OPTIONS.maxPages);
 	const [maxCharsPerPage, setMaxCharsPerPage] = useState<number>(
@@ -88,6 +89,7 @@ export default function AdminDistrictClient({
 					ignoreRobots,
 					dropAllQuery,
 					renderJavascript,
+					crawlAllPages,
 					urlsToIgnore,
 					schoolId: addSchoolResult.schoolId,
 				});
@@ -132,6 +134,7 @@ export default function AdminDistrictClient({
 		setIncludeSitemapSeeds(true);
 		setIgnoreRobots(true);
 		setRenderJavascript(false);
+		setCrawlAllPages(false);
 		setMaxDepth(DEFAULT_CRAWL_OPTIONS.maxDepth);
 		setMaxPages(DEFAULT_CRAWL_OPTIONS.maxPages);
 		setMaxCharsPerPage(DEFAULT_CRAWL_OPTIONS.maxCharsPerPage);
@@ -306,6 +309,18 @@ export default function AdminDistrictClient({
 						className="text-sm text-neutral-700 dark:text-neutral-300"
 					>
 						Render JavaScript (for JS-heavy sites)
+					</label>
+				</div>
+
+				<div className="flex items-center gap-2">
+					<input
+						id="crawlAllPages"
+						type="checkbox"
+						checked={crawlAllPages}
+						onChange={(event) => setCrawlAllPages(event.target.checked)}
+					/>
+					<label htmlFor="crawlAllPages" className="text-sm text-neutral-700 dark:text-neutral-300">
+						Crawl entire domain (ignore page/depth limits)
 					</label>
 				</div>
 

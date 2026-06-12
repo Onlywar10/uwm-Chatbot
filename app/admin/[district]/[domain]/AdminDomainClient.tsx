@@ -29,6 +29,7 @@ type CrawlSettings = {
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
 	renderJavascript: boolean;
+	crawlAllPages: boolean;
 	urlsToIgnore: string[];
 };
 
@@ -62,6 +63,7 @@ export default function AdminDomainClient({
 	const [ignoreRobots, setIgnoreRobots] = useState(crawlSettings[0].ignoreRobots);
 	const [dropAllQuery, setDropAllQuery] = useState(crawlSettings[0].dropAllQuery);
 	const [renderJavascript, setRenderJavascript] = useState(crawlSettings[0].renderJavascript);
+	const [crawlAllPages, setCrawlAllPages] = useState(crawlSettings[0].crawlAllPages);
 	const [maxDepth, setMaxDepth] = useState<number>(crawlSettings[0].maxDepth);
 	const [maxPages, setMaxPages] = useState<number>(crawlSettings[0].maxPages);
 	const [maxCharsPerPage, setMaxCharsPerPage] = useState<number>(crawlSettings[0].maxCharsPerPage);
@@ -95,6 +97,7 @@ export default function AdminDomainClient({
 				ignoreRobots: ignoreRobots,
 				dropAllQuery: dropAllQuery,
 				renderJavascript: renderJavascript,
+				crawlAllPages: crawlAllPages,
 				urlsToIgnore: urlsToIgnore,
 				schoolId: school.schoolId,
 			});
@@ -151,6 +154,7 @@ export default function AdminDomainClient({
 		setIgnoreRobots(crawlSettings[0].ignoreRobots);
 		setDropAllQuery(crawlSettings[0].dropAllQuery);
 		setRenderJavascript(crawlSettings[0].renderJavascript);
+		setCrawlAllPages(crawlSettings[0].crawlAllPages);
 		setMaxDepth(crawlSettings[0].maxDepth);
 		setMaxPages(crawlSettings[0].maxPages);
 		setMaxCharsPerPage(crawlSettings[0].maxCharsPerPage);
@@ -309,6 +313,18 @@ export default function AdminDomainClient({
 						className="text-sm text-neutral-700 dark:text-neutral-300"
 					>
 						Render JavaScript (for JS-heavy sites)
+					</label>
+				</div>
+
+				<div className="flex items-center gap-2">
+					<input
+						id="crawlAllPages"
+						type="checkbox"
+						checked={crawlAllPages}
+						onChange={(event) => setCrawlAllPages(event.target.checked)}
+					/>
+					<label htmlFor="crawlAllPages" className="text-sm text-neutral-700 dark:text-neutral-300">
+						Crawl entire domain (ignore page/depth limits)
 					</label>
 				</div>
 

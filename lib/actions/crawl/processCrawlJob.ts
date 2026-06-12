@@ -258,7 +258,10 @@ export async function processCrawlJob(crawlJobId: string) {
 			}
 		}
 
-		if (jobType === "crawl" && depth < crawlSettings.maxCrawlDepth) {
+		if (
+			jobType === "crawl" &&
+			(crawlSettings.crawlAllPages || depth < crawlSettings.maxCrawlDepth)
+		) {
 			const links = extractLinks(crawlSettings.domain, html, {
 				dropAllQuery: crawlSettings.dropAllQuery,
 				followCatapultAliases: !usedSitemap,

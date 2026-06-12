@@ -9,6 +9,7 @@ export type CrawlSettings = {
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
 	renderJavascript: boolean;
+	crawlAllPages: boolean;
 	maxCrawlDepth: number;
 	maxCrawlPages: number;
 	maxCharsPerPage: number;
@@ -35,6 +36,7 @@ export type CrawlSetup = {
 		ignoreRobots: boolean;
 		dropAllQuery: boolean;
 		renderJavascript: boolean;
+		crawlAllPages: boolean;
 		urlsToIgnore: string[];
 	};
 	crawlSettings: {
@@ -44,6 +46,7 @@ export type CrawlSetup = {
 		ignoreRobots: boolean;
 		dropAllQuery: boolean;
 		renderJavascript: boolean;
+		crawlAllPages: boolean;
 		maxCrawlDepth: number;
 		maxCrawlPages: number;
 		maxCharsPerPage: number;
@@ -63,6 +66,7 @@ export type CrawlSettingsSnapshot = {
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
 	renderJavascript: boolean;
+	crawlAllPages: boolean;
 	urlsToIgnore: string[];
 };
 

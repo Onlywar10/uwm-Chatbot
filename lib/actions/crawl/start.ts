@@ -15,6 +15,11 @@ import { getCrawlSettings } from "./crawlSettings";
 import type { CrawlSetup, RobotsRules } from "@/lib/types/crawl";
 import type { FlowControl } from "@upstash/qstash";
 
+// Effective "no limit" for crawl_all_pages runs. Large enough to never trigger
+// the page cap / run-completion-by-count, but within Postgres int4 range; the
+// crawl still terminates once the link frontier is exhausted (URL dedup).
+const UNLIMITED_MAX_PAGES = 1_000_000_000;
+
 const fetchRobots = async (origin: string): Promise<RobotsRules> => {
 	try {
 		const response = await fetch(`${origin}/robots.txt`, { cache: "no-store" });
@@ -360,7 +365,7 @@ export async function startCrawl(
 			startUrl: url,
 			entityType,
 			entityId,
-			maxPages: crawlSettings.maxCrawlPages,
+			maxPages: crawlSettings.crawlAllPages ? UNLIMITED_MAX_PAGES : crawlSettings.maxCrawlPages,
 			robots,
 			crawlDelay,
 			crawlRunType: "crawl",
@@ -539,7 +544,7 @@ export async function startScheduledCrawl(
 			startUrl: url,
 			entityType,
 			entityId,
-			maxPages: crawlSettings.maxCrawlPages,
+			maxPages: crawlSettings.crawlAllPages ? UNLIMITED_MAX_PAGES : crawlSettings.maxCrawlPages,
 			robots,
 			crawlDelay,
 			crawlRunType: "crawl",

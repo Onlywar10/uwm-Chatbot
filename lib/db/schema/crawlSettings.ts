@@ -25,6 +25,9 @@ export const crawlSettings = pgTable(
 		ignoreRobots: boolean("ignore_robots").notNull(),
 		dropAllQuery: boolean("drop_all_query").notNull(),
 		renderJavascript: boolean("render_javascript").notNull().default(false),
+		// When true, ignore maxCrawlDepth/maxCrawlPages and crawl the whole domain
+		// until the link frontier is exhausted (URL dedup guarantees termination).
+		crawlAllPages: boolean("crawl_all_pages").notNull().default(false),
 		maxCrawlDepth: integer("max_crawl_depth").notNull(),
 		maxCrawlPages: integer("max_crawl_pages").notNull(),
 		maxCharsPerPage: integer("max_chars_per_page").notNull(),

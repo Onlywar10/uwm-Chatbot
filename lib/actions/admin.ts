@@ -73,6 +73,7 @@ export async function getCrawlSettings(domain: string) {
 			ignoreRobots: crawlSettings.ignoreRobots,
 			dropAllQuery: crawlSettings.dropAllQuery,
 			renderJavascript: crawlSettings.renderJavascript,
+			crawlAllPages: crawlSettings.crawlAllPages,
 			urlsToIgnore: crawlSettings.urlsToIgnore,
 		})
 		.from(crawlSettings)
@@ -95,6 +96,7 @@ export async function reCrawlDomain(params: {
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
 	renderJavascript: boolean;
+	crawlAllPages: boolean;
 	urlsToIgnore: string[];
 	schoolId: string;
 }) {
@@ -109,6 +111,7 @@ export async function reCrawlDomain(params: {
 		ignoreRobots,
 		dropAllQuery,
 		renderJavascript,
+		crawlAllPages,
 		urlsToIgnore,
 		schoolId,
 	} = params;
@@ -137,6 +140,7 @@ export async function reCrawlDomain(params: {
 		ignoreRobots,
 		dropAllQuery,
 		renderJavascript,
+		crawlAllPages,
 		urlsToIgnore,
 		entityType: "school",
 		entityId: schoolId,

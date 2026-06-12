@@ -33,6 +33,7 @@ const insertCrawlRunSchema = z.object({
 		ignoreRobots: z.boolean(),
 		dropAllQuery: z.boolean(),
 		renderJavascript: z.boolean(),
+		crawlAllPages: z.boolean(),
 		urlsToIgnore: z.array(z.string()),
 	}),
 });

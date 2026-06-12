@@ -27,6 +27,7 @@ const claimCrawlJobSchema = z.object({
 		ignoreRobots: z.boolean(),
 		dropAllQuery: z.boolean(),
 		renderJavascript: z.boolean(),
+		crawlAllPages: z.boolean(),
 		urlsToIgnore: z.array(z.string()),
 	}),
 });
@@ -56,7 +57,8 @@ export async function claimCrawlJob(input: unknown) {
 			.from(crawlJobs)
 			.where(eq(crawlJobs.crawlRunId, parsed.crawlRunId));
 
-		if (count >= parsed.settingsSnapshot.maxPages) throw new Error("max_pages");
+		if (!parsed.settingsSnapshot.crawlAllPages && count >= parsed.settingsSnapshot.maxPages)
+			throw new Error("max_pages");
 
 		const [crawlJob] = await db
 			.insert(crawlJobs)
