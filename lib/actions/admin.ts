@@ -146,11 +146,7 @@ export async function reCrawlDomain(params: {
 	return { message: `Crawl started for ${domain}. Pages will be indexed in the background.` };
 }
 
-export async function reIndexPage(params: {
-	domain: string;
-	url: string;
-	schoolId: string;
-}) {
+export async function reIndexPage(params: { domain: string; url: string; schoolId: string }) {
 	await requireAuth();
 	const { domain, url } = params;
 

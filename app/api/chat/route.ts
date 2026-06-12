@@ -13,10 +13,7 @@ const chatModel = "openai/gpt-4o-mini";
 // Max retrieved chunks surfaced to the model after cross-query dedup.
 const TOP_K = 8;
 
-const ALLOWED_ORIGINS = new Set([
-	"https://www.unitedwaymerced.org",
-	"https://www.211merced.org",
-]);
+const ALLOWED_ORIGINS = new Set(["https://www.unitedwaymerced.org", "https://www.211merced.org"]);
 
 function getCorsHeaders(req: Request): Record<string, string> {
 	const origin = req.headers.get("origin") ?? "";
