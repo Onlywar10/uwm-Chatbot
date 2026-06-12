@@ -10,7 +10,10 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { requireAuth } from "@/lib/auth/guards";
 import { upsertCrawlSettings } from "./crawl/crawlSettings";
-import { startCrawl, startRecrawl } from "./crawl/start";
+// NOTE: ./crawl/start (and its transitive deps: unpdf/pdf.js, pdf2md, puppeteer)
+// are loaded lazily inside the actions below. A static import would pull those
+// browser/native libs into the admin pages' render bundle and crash SSR with
+// "window is not defined" / "document.querySelector is not a function".
 
 export async function getDomainStats() {
 	await requireAuth();
@@ -140,6 +143,7 @@ export async function reCrawlDomain(params: {
 	});
 	if (!settings.ok) throw new Error(settings.error);
 
+	const { startCrawl } = await import("./crawl/start");
 	const result = await startCrawl(seed, "school", schoolId, settings.id);
 	if (!result.ok) throw new Error(result.error);
 
@@ -161,6 +165,7 @@ export async function reIndexPage(params: { domain: string; url: string; schoolI
 	// is unchanged (content-hash dedup would otherwise skip it).
 	await db.delete(resources).where(and(eq(resources.domain, domain), eq(resources.url, url)));
 
+	const { startRecrawl } = await import("./crawl/start");
 	const result = await startRecrawl([url], url, settings.id);
 	if (!result.ok) throw new Error(result.error);
 
