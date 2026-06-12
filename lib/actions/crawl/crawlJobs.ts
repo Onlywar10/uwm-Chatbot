@@ -10,6 +10,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { updateCrawlScheduleSuccess } from "./crawlSchedule";
 import { log } from "../logger";
+import { CRAWL_ALL_PAGES_CAP } from "../crawlDefaults";
 
 import { z } from "zod";
 
@@ -57,8 +58,13 @@ export async function claimCrawlJob(input: unknown) {
 			.from(crawlJobs)
 			.where(eq(crawlJobs.crawlRunId, parsed.crawlRunId));
 
-		if (!parsed.settingsSnapshot.crawlAllPages && count >= parsed.settingsSnapshot.maxPages)
-			throw new Error("max_pages");
+		// In crawl-all mode we ignore the per-setting page limit but still enforce a
+		// hard safety cap so runaway sites (infinite calendars, faceted nav) can't
+		// crawl forever.
+		const effectiveMaxPages = parsed.settingsSnapshot.crawlAllPages
+			? CRAWL_ALL_PAGES_CAP
+			: parsed.settingsSnapshot.maxPages;
+		if (count >= effectiveMaxPages) throw new Error("max_pages");
 
 		const [crawlJob] = await db
 			.insert(crawlJobs)
