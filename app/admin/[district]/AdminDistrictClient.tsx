@@ -3,14 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { crawlSite } from "@/lib/actions/crawl/crawl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { DEFAULT_CRAWL_OPTIONS } from "@/lib/actions/crawlDefaults";
 import { addSchool } from "@/lib/actions/schools";
 import { canonicalizeUrlString } from "@/lib/ai/url";
-import { startCrawl } from "@/lib/actions/crawl/start";
+import { reCrawlDomain } from "@/lib/actions/admin";
 
 type DomainStat = {
 	domain: string;
@@ -43,6 +42,7 @@ export default function AdminDistrictClient({
 	const [includeSitemapSeeds, setIncludeSitemapSeeds] = useState(true);
 	const [ignoreRobots, setIgnoreRobots] = useState(true);
 	const [dropAllQuery, setDropAllQuery] = useState(true);
+	const [renderJavascript, setRenderJavascript] = useState(false);
 	const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_CRAWL_OPTIONS.maxDepth);
 	const [maxPages, setMaxPages] = useState<number>(DEFAULT_CRAWL_OPTIONS.maxPages);
 	const [maxCharsPerPage, setMaxCharsPerPage] = useState<number>(
@@ -70,7 +70,7 @@ export default function AdminDistrictClient({
 
 	const onSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
-		setStatus("Crawling...");
+		setStatus("Starting crawl...");
 
 		try {
 			const domain = getDomain();
@@ -78,20 +78,20 @@ export default function AdminDistrictClient({
 			const addSchoolResult = await addSchool({ name: newSchool, districtId: district.id, domain });
 
 			if (addSchoolResult.ok) {
-				await startCrawl(
-					url,
-					{
-						dropAllQuery,
-						maxPages,
-						maxDepth,
-						maxCharsPerPage,
-						includeSitemapSeeds,
-						ignoreRobots,
-						urlsToIgnore,
-					},
-					addSchoolResult.schoolId,
-					true,
-				);
+				const result = await reCrawlDomain({
+					domain,
+					startUrl: url,
+					maxDepth,
+					maxPages,
+					maxCharsPerPage,
+					includeSitemapSeeds,
+					ignoreRobots,
+					dropAllQuery,
+					renderJavascript,
+					urlsToIgnore,
+					schoolId: addSchoolResult.schoolId,
+				});
+				setStatus(result.message);
 			} else {
 				setStatus(`${addSchoolResult.error}`);
 			}
@@ -131,6 +131,7 @@ export default function AdminDistrictClient({
 	const resetConfigurations = () => {
 		setIncludeSitemapSeeds(true);
 		setIgnoreRobots(true);
+		setRenderJavascript(false);
 		setMaxDepth(DEFAULT_CRAWL_OPTIONS.maxDepth);
 		setMaxPages(DEFAULT_CRAWL_OPTIONS.maxPages);
 		setMaxCharsPerPage(DEFAULT_CRAWL_OPTIONS.maxCharsPerPage);
@@ -290,6 +291,21 @@ export default function AdminDistrictClient({
 					/>
 					<label htmlFor="dropAllQuery" className="text-sm text-neutral-700 dark:text-neutral-300">
 						Drop all query
+					</label>
+				</div>
+
+				<div className="flex items-center gap-2">
+					<input
+						id="renderJavascript"
+						type="checkbox"
+						checked={renderJavascript}
+						onChange={(event) => setRenderJavascript(event.target.checked)}
+					/>
+					<label
+						htmlFor="renderJavascript"
+						className="text-sm text-neutral-700 dark:text-neutral-300"
+					>
+						Render JavaScript (for JS-heavy sites)
 					</label>
 				</div>
 
