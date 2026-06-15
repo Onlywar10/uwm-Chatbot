@@ -2,8 +2,10 @@
 
 import { FeedbackButtons } from "@/components/FeedbackButtons";
 import { LoadingIcon } from "@/components/icons";
+import { Sources } from "@/components/Sources";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { ChatSource } from "@/lib/types/chat";
 import { cn } from "@/lib/utils";
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -166,17 +168,15 @@ export default function Chat() {
 											{getTextFromMessage(userQuery)}
 										</div>
 										<AssistantMessage message={lastAssistantMessage} />
-										{(lastAssistantMessage.metadata as { turnId?: string })
-											?.turnId && (
+										<Sources
+											sources={
+												(lastAssistantMessage.metadata as { sources?: ChatSource[] })?.sources ?? []
+											}
+										/>
+										{(lastAssistantMessage.metadata as { turnId?: string })?.turnId && (
 											<FeedbackButtons
-												key={
-													(lastAssistantMessage.metadata as { turnId: string })
-														.turnId
-												}
-												turnId={
-													(lastAssistantMessage.metadata as { turnId: string })
-														.turnId
-												}
+												key={(lastAssistantMessage.metadata as { turnId: string }).turnId}
+												turnId={(lastAssistantMessage.metadata as { turnId: string }).turnId}
 											/>
 										)}
 									</div>

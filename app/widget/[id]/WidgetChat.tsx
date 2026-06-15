@@ -2,6 +2,8 @@
 
 import { FeedbackButtons } from "@/components/FeedbackButtons";
 import { LoadingIcon } from "@/components/icons";
+import { Sources } from "@/components/Sources";
+import type { ChatSource } from "@/lib/types/chat";
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -55,10 +57,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 
 	return (
 		<div className="flex flex-col h-screen bg-white">
-			<div
-				ref={scrollRef}
-				className="flex-1 overflow-y-auto p-4 space-y-4"
-			>
+			<div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
 				{widget.greeting && messages.length === 0 && (
 					<div className="flex justify-start">
 						<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
@@ -85,6 +84,9 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 										<ReactMarkdown>{getTextFromMessage(message)}</ReactMarkdown>
 									</div>
 								</div>
+								<Sources
+									sources={(message.metadata as { sources?: ChatSource[] })?.sources ?? []}
+								/>
 								{(message.metadata as { turnId?: string })?.turnId && (
 									<FeedbackButtons
 										key={(message.metadata as { turnId: string }).turnId}
@@ -110,10 +112,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 				)}
 			</div>
 
-			<form
-				onSubmit={handleSubmit}
-				className="border-t border-neutral-200 p-3 flex gap-2 bg-white"
-			>
+			<form onSubmit={handleSubmit} className="border-t border-neutral-200 p-3 flex gap-2 bg-white">
 				<input
 					className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
 					style={{ "--tw-ring-color": accentColor } as React.CSSProperties}

@@ -6,6 +6,7 @@ import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
 import { convertToModelMessages, generateText, Output, streamText, type UIMessage } from "ai";
 import { z } from "zod";
+import type { ChatSource } from "@/lib/types/chat";
 
 export const maxDuration = 30;
 
@@ -32,7 +33,12 @@ export async function OPTIONS(req: Request) {
 	return new Response(null, { status: 204, headers: getCorsHeaders(req) });
 }
 
-type RetrievalHit = { name: string; similarity: number; sourceUrl?: string };
+type RetrievalHit = {
+	name: string;
+	similarity: number;
+	sourceUrl?: string;
+	metadata?: { pageTitle?: string };
+};
 
 function getDomainFromRequest(req: Request): string | null {
 	let devOverride = "";
@@ -161,12 +167,29 @@ export async function POST(req: Request) {
 					)
 					.join("\n\n---\n\n");
 
+	// Dedup the retrieved pages by URL into a sources list for the UI (skip the
+	// synthetic school-directory resource, which isn't a real page).
+	const sources: ChatSource[] = Array.from(
+		new Map(
+			unique
+				.filter((hit) => hit.sourceUrl && !hit.sourceUrl.endsWith("/__directory"))
+				.map((hit) => [
+					hit.sourceUrl as string,
+					{
+						url: hit.sourceUrl as string,
+						title: hit.metadata?.pageTitle || (hit.sourceUrl as string),
+					},
+				]),
+		).values(),
+	);
+
 	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced and the 211 Merced community resource directory.
 
 Rules:
 - Answer the user's question using ONLY the Context below. Do not use outside knowledge and do not guess.
 - If the Context does not answer the question, START your reply with "Sorry," and briefly say what you could not find. Reserve a leading "Sorry," only for these no-answer cases, never as polite filler.
-- When helpful, point the user to the source link for the information you used.
+- When the user is looking for a page or resource (e.g. "where do I donate?", "the application form"), give them the relevant link as a clickable markdown link. Use the [Source: …] URL of the page the information came from, and any relevant links that appear inside the Context (these may be internal pages or external resources).
+- Prefer linking the most specific relevant page. Do not invent URLs — only use links present in the Context.
 
 Context:
 ${context || "(empty)"}
@@ -224,7 +247,7 @@ ${context || "(empty)"}
 
 	return result.toUIMessageStreamResponse({
 		messageMetadata: ({ part }) => {
-			if (part.type === "start") return { turnId };
+			if (part.type === "start") return { turnId, sources };
 		},
 	});
 }
