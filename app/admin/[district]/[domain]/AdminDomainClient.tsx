@@ -10,6 +10,7 @@ import {
 	reCrawlDomain,
 	reIndexPage,
 } from "@/lib/actions/admin";
+import { cancelCrawl } from "@/lib/actions/crawl/crawlRun";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -22,6 +23,7 @@ type DomainResourceRow = {
 };
 
 type CrawlSettings = {
+	id: string;
 	maxDepth: number;
 	maxPages: number;
 	maxCharsPerPage: number;
@@ -80,6 +82,21 @@ export default function AdminDomainClient({
 		setStatus("Purging...");
 		const purgeResult = await purgeDomain(domain);
 		setStatus(purgeResult.message);
+		await refresh();
+	};
+
+	const onStopCrawl = async () => {
+		setStatus("Stopping crawl...");
+		const result = await cancelCrawl(crawlSettings[0].id);
+		if (!result.ok) {
+			setStatus(result.error);
+			return;
+		}
+		setStatus(
+			result.cancelled > 0
+				? "Crawl stopping — in-progress jobs will wind down shortly."
+				: "No crawl is currently running for this domain.",
+		);
 		await refresh();
 	};
 
@@ -207,6 +224,10 @@ export default function AdminDomainClient({
 					<div className="flex gap-2">
 						<Button variant="destructive" onClick={onPurge}>
 							Purge
+						</Button>
+
+						<Button variant="outline" onClick={onStopCrawl}>
+							Stop crawl
 						</Button>
 
 						<form onSubmit={onReCrawl} className="flex gap-2 flex-1">

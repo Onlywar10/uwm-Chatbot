@@ -124,6 +124,7 @@ export async function getCrawlJobData(id: string) {
 				url: crawlJobs.url,
 				depth: crawlJobs.depth,
 				crawlRunId: crawlRuns.id,
+				runStatus: crawlRuns.status,
 				robots: crawlRuns.robots,
 				crawlDelay: crawlRuns.crawlDelay,
 				usedSitemap: crawlRuns.usedSitemap,

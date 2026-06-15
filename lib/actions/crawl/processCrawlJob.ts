@@ -96,8 +96,25 @@ export async function processCrawlJob(crawlJobId: string) {
 		throw new Error(crawlData.error);
 	}
 
-	const { crawlSettings, url, depth, crawlRunId, robots, crawlDelay, jobType, usedSitemap } =
-		crawlData.crawlData;
+	const {
+		crawlSettings,
+		url,
+		depth,
+		crawlRunId,
+		runStatus,
+		robots,
+		crawlDelay,
+		jobType,
+		usedSitemap,
+	} = crawlData.crawlData;
+
+	// Stop button / cancellation: if the run is no longer "running", drain this
+	// in-flight QStash message as a no-op (return 200 so QStash doesn't retry) and
+	// publish no children, which kills the rest of the cascade within one cycle.
+	if (runStatus !== "running") {
+		if (verbose) console.log(`Skipping ${url}: crawl run ${crawlRunId} is ${runStatus}`);
+		return;
+	}
 
 	const settingsSnapshot = generateCrawlSettingSnapshot(crawlSettings);
 

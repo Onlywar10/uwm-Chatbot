@@ -6,6 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { crawlRuns } from "@/lib/db/schema/crawlRuns";
 import { crawlJobs } from "@/lib/db/schema/crawlJobs";
 import { log } from "../logger";
+import { requireAuth } from "@/lib/auth/guards";
 import type { RobotsRules } from "@/lib/types/crawl";
 
 const robotsRulesSchema: z.ZodType<RobotsRules> = z.object({
@@ -94,6 +95,32 @@ export async function updateCrawlRunError(id: string, input: unknown) {
 		});
 
 		throw error;
+	}
+}
+
+/**
+ * Stops any in-progress crawl(s) for a crawl setting by flipping the run(s) to
+ * a non-running status. In-flight QStash jobs check the run status and bail, so
+ * the cascade halts within one delivery cycle. Returns how many runs were stopped.
+ */
+export async function cancelCrawl(crawlSettingId: string) {
+	try {
+		await requireAuth();
+
+		const cancelled = await db
+			.update(crawlRuns)
+			.set({ status: "failure", errorMessage: "Cancelled by user" })
+			.where(and(eq(crawlRuns.crawlSettingId, crawlSettingId), eq(crawlRuns.status, "running")))
+			.returning({ id: crawlRuns.id });
+
+		return { ok: true as const, cancelled: cancelled.length };
+	} catch (error) {
+		const errorMsg =
+			error instanceof Error && error.message.length > 0
+				? error.message
+				: "Failed to cancel crawl.";
+
+		return { ok: false as const, error: errorMsg };
 	}
 }
 
