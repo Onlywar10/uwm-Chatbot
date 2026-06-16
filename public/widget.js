@@ -23,10 +23,6 @@
   var panel = null;
   var expandBtn = null;
 
-  // Small white "helping hand / heart" mark as a logo placeholder. Swap for the
-  // real United Way logo by replacing this SVG (or set data-logo on the script).
-  var logoSvg =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.7-9A5 5 0 0 1 12 6.2 5 5 0 0 1 21.7 12c-2.2 4.4-9.7 9-9.7 9z"/></svg>';
   var expandIcon =
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
   var shrinkIcon =
@@ -144,7 +140,7 @@
       '<span style="font-size:11px;opacity:0.85;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
       subtitle +
       "</span></div>";
-    brand.innerHTML = logoSvg + brandText;
+    brand.innerHTML = brandText;
 
     var closeBtn = headerButton("Close chat");
     closeBtn.innerHTML = closeIcon;
