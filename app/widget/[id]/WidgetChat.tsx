@@ -53,7 +53,8 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		setInput("");
 	};
 
-	const accentColor = widget.accentColor || "#1a73e8";
+	// United Way of Merced brand blue (overridable per widget config).
+	const accentColor = widget.accentColor || "#003DA5";
 
 	return (
 		<div className="flex flex-col h-screen bg-white">
@@ -132,6 +133,10 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 					Send
 				</button>
 			</form>
+
+			<div className="px-3 pb-2 pt-0 text-center text-[10px] text-neutral-400 bg-white">
+				Powered by United Way of Merced County · 211 Community Resources
+			</div>
 		</div>
 	);
 }

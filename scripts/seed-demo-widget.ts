@@ -8,8 +8,9 @@ const DEMO_WIDGET = {
 	id: "uwm-widget-001",
 	name: "UWM Demo Widget",
 	domains: ["www.unitedwaymerced.org"],
-	greeting: "Hi! Ask me about United Way of Merced or 211 Merced resources.",
-	accentColor: "#1a73e8",
+	greeting:
+		"Hi! 👋 I'm the United Way of Merced County assistant. Ask me about our programs, how to donate or volunteer, or finding 211 community resources — I can point you to the right page.",
+	accentColor: "#003DA5",
 	enabled: true,
 };
 
