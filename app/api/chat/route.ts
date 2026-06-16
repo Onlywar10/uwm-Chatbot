@@ -8,9 +8,13 @@ import { convertToModelMessages, generateText, Output, streamText, type UIMessag
 import { z } from "zod";
 import type { ChatSource } from "@/lib/types/chat";
 
-export const maxDuration = 30;
+// gpt-5 streams the final answer slower than 4o-mini, so allow more room.
+export const maxDuration = 60;
 
-const chatModel = "openai/gpt-4o-mini";
+// Cheap model for internal retrieval-query generation.
+const queryModel = "openai/gpt-4o-mini";
+// Stronger model that composes the user-facing answer.
+const composerModel = "openai/gpt-5";
 // Max retrieved chunks surfaced to the model after cross-query dedup.
 const TOP_K = 8;
 
@@ -119,7 +123,7 @@ export async function POST(req: Request) {
 
 	const startQueryGen = performance.now();
 	const queryGen = await generateText({
-		model: chatModel,
+		model: queryModel,
 		system:
 			"You generate retrieval queries for a website knowledge base. " + "Return ONLY valid JSON.",
 		prompt:
@@ -199,7 +203,7 @@ ${context || "(empty)"}
 	const startLlm = performance.now();
 
 	const result = streamText({
-		model: chatModel,
+		model: composerModel,
 		messages: modelMessages,
 		system: systemPrompt,
 		onFinish: async ({ text }) => {
@@ -219,12 +223,12 @@ ${context || "(empty)"}
 					retrieval: Math.round(endRetrieval - startRetrieval),
 					llm: Math.round(endTotal - startLlm),
 				},
-				model: chatModel,
+				model: composerModel,
 				tokens: {
 					input: inputTokens,
 					output: outputTokens,
 				},
-				estimatedCost: calculateCost(chatModel, inputTokens, outputTokens),
+				estimatedCost: calculateCost(composerModel, inputTokens, outputTokens),
 				retrieval: {
 					topK: TOP_K,
 					chunksReturned: unique.length,

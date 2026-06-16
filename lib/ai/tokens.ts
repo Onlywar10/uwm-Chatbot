@@ -14,6 +14,9 @@ const PRICING: Record<string, { input: number; output: number }> = {
 };
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-	const pricing = PRICING[model] ?? PRICING["gpt-4o-mini"];
+	// Model ids may carry a gateway provider prefix (e.g. "openai/gpt-5"); the
+	// pricing table is keyed by the bare model name.
+	const key = model.replace(/^[^/]+\//, "");
+	const pricing = PRICING[key] ?? PRICING["gpt-4o-mini"];
 	return inputTokens * pricing.input + outputTokens * pricing.output;
 }
