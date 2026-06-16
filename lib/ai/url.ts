@@ -54,3 +54,44 @@ export function getDomain(url: string) {
 
 	return domain;
 }
+
+const stripTrailingSlash = (s: string) => s.replace(/\/+$/, "");
+
+/**
+ * True if `href` should be skipped given the crawl's ignore list. Matching is by
+ * canonicalized path PREFIX, so an entry like ".../community-calendar-1" skips
+ * that page AND all of its sub-pages (".../community-calendar-1/some-event"),
+ * but not a sibling like ".../community-calendar-10". Both sides are canonicalized
+ * so user-entered values (trailing slash, query, casing) still match.
+ */
+export function isUrlIgnored(
+	href: string,
+	ignoreList: string[] | null | undefined,
+	opts?: { dropAllQuery?: boolean },
+): boolean {
+	if (!ignoreList || ignoreList.length === 0) return false;
+
+	let target: string;
+	try {
+		target = stripTrailingSlash(canonicalizeUrlString(href, opts));
+	} catch {
+		target = stripTrailingSlash(href);
+	}
+
+	for (const raw of ignoreList) {
+		const trimmed = raw?.trim();
+		if (!trimmed) continue;
+
+		let prefix: string;
+		try {
+			prefix = stripTrailingSlash(canonicalizeUrlString(trimmed, opts));
+		} catch {
+			prefix = stripTrailingSlash(trimmed);
+		}
+		if (!prefix) continue;
+
+		if (target === prefix || target.startsWith(`${prefix}/`)) return true;
+	}
+
+	return false;
+}

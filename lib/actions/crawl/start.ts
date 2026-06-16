@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth/guards";
-import { canonicalizeUrl, canonicalizeUrlString } from "@/lib/ai/url";
+import { canonicalizeUrl, canonicalizeUrlString, isUrlIgnored } from "@/lib/ai/url";
 import { createCrawlRun, updateCrawlRunError } from "./crawlRun";
 import { claimCrawlJob } from "./crawlJobs";
 import { updateCrawlScheduleState } from "./crawlSchedule";
@@ -245,7 +245,8 @@ async function executeCrawl(
 		});
 		if (
 			normalizedUrl.hostname.toLowerCase() === hostname &&
-			(basePrefix === "" || normalizedUrl.pathname.startsWith(basePrefix))
+			(basePrefix === "" || normalizedUrl.pathname.startsWith(basePrefix)) &&
+			!isUrlIgnored(normalizedUrl.toString(), settingsSnapshot.urlsToIgnore, { dropAllQuery })
 		) {
 			const crawlJob = await claimCrawlJob({
 				url: normalizedUrl.toString(),

@@ -2,7 +2,7 @@
 
 import type { FlowControl } from "@upstash/qstash";
 import type { RobotsRules } from "@/lib/types/crawl";
-import { canonicalizeUrl } from "@/lib/ai/url";
+import { canonicalizeUrl, isUrlIgnored } from "@/lib/ai/url";
 import {
 	claimCrawlJob,
 	getCrawlJobData,
@@ -289,7 +289,9 @@ export async function processCrawlJob(crawlJobId: string) {
 						u.href.startsWith("https://docs.google.com/document/d/") ||
 						u.href.startsWith("https://tinyurl.com/") ||
 						u.href.endsWith(".pdf")) &&
-					!crawlSettings.urlsToIgnore.includes(u.href),
+					!isUrlIgnored(u.href, crawlSettings.urlsToIgnore, {
+						dropAllQuery: crawlSettings.dropAllQuery,
+					}),
 			);
 
 			const jobsToPublish: { crawlJobId: string; flowControl: FlowControl }[] = [];
