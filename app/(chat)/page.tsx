@@ -202,7 +202,7 @@ function AssistantMessage({ message }: { message?: UIMessage }) {
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				exit={{ opacity: 0 }}
-				className="text-sm leading-relaxed text-neutral-800 dark:text-neutral-200 overflow-hidden [&_*:first-child]:mt-0 [&_*:last-child]:mb-0"
+				className="chat-md text-sm leading-relaxed text-neutral-800 dark:text-neutral-200 overflow-hidden"
 				id="markdown"
 			>
 				<Streamdown>{text}</Streamdown>

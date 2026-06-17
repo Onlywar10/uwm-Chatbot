@@ -81,7 +81,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 						) : (
 							<div className="flex flex-col items-start">
 								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
-									<div className="text-sm text-neutral-800 leading-relaxed [&_*:first-child]:mt-0 [&_*:last-child]:mb-0">
+									<div className="chat-md text-sm text-neutral-800 leading-relaxed">
 										<Streamdown>{getTextFromMessage(message)}</Streamdown>
 									</div>
 								</div>
