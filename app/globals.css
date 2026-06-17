@@ -1,6 +1,21 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
+
+/* Let Tailwind generate the utility classes Streamdown renders with. */
+@source "../node_modules/streamdown/dist/*.js";
+
+/* Make markdown links obviously clickable (blue + underline). Streamdown sets
+   target="_blank" + data-streamdown="link" on anchors, so clicks open a new tab. */
+[data-streamdown="link"] {
+	color: #2563eb;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+[data-streamdown="link"]:hover {
+	color: #1d4ed8;
+}
 
 @theme inline {
 	--color-background: var(--background);

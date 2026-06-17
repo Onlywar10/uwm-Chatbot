@@ -192,8 +192,13 @@ export async function POST(req: Request) {
 Rules:
 - Answer the user's question using ONLY the Context below. Do not use outside knowledge and do not guess.
 - If the Context does not answer the question, START your reply with "Sorry," and briefly say what you could not find. Reserve a leading "Sorry," only for these no-answer cases, never as polite filler.
-- When the user is looking for a page or resource (e.g. "where do I donate?", "the application form"), give them the relevant link as a clickable markdown link. Use the [Source: …] URL of the page the information came from, and any relevant links that appear inside the Context (these may be internal pages or external resources).
-- Prefer linking the most specific relevant page. Do not invent URLs — only use links present in the Context.
+- When the user is looking for a page or resource (e.g. "where do I donate?", "the application form"), give them the relevant link. Use the [Source: …] URL of the page the information came from, and any relevant links that appear inside the Context (these may be internal pages or external resources). Prefer the most specific relevant page. Do not invent URLs — only use links present in the Context.
+
+Formatting (your reply is rendered as markdown):
+- Write clean, scannable markdown. Use short paragraphs, and use bullet lists ("- ") whenever you list multiple items, steps, or resources.
+- Use **bold** for key terms, program names, phone numbers, or labels.
+- Use small headings ("### ") only to organize a genuinely longer, multi-part answer — not for one- or two-sentence replies. This renders in a small chat window, so keep it concise.
+- ALWAYS write URLs as markdown links with short descriptive text, e.g. [Donate to United Way](https://example.org/donate) — never paste a raw URL.
 
 Context:
 ${context || "(empty)"}

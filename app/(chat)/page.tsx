@@ -11,7 +11,7 @@ import { type UIMessage, useChat } from "@ai-sdk/react";
 import { AnimatePresence, motion } from "framer-motion";
 import type React from "react";
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
 function deriveDomainKey(urlStr: string): string {
@@ -202,10 +202,10 @@ function AssistantMessage({ message }: { message?: UIMessage }) {
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				exit={{ opacity: 0 }}
-				className="whitespace-pre-wrap font-mono text-sm text-neutral-800 dark:text-neutral-200 overflow-hidden"
+				className="text-sm leading-relaxed text-neutral-800 dark:text-neutral-200 overflow-hidden [&_*:first-child]:mt-0 [&_*:last-child]:mb-0"
 				id="markdown"
 			>
-				<ReactMarkdown>{text}</ReactMarkdown>
+				<Streamdown>{text}</Streamdown>
 			</motion.div>
 		</AnimatePresence>
 	);

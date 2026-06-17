@@ -7,7 +7,7 @@ import type { ChatSource } from "@/lib/types/chat";
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
 type WidgetConfig = {
@@ -81,8 +81,8 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 						) : (
 							<div className="flex flex-col items-start">
 								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
-									<div className="prose prose-sm prose-neutral max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-										<ReactMarkdown>{getTextFromMessage(message)}</ReactMarkdown>
+									<div className="text-sm text-neutral-800 leading-relaxed [&_*:first-child]:mt-0 [&_*:last-child]:mb-0">
+										<Streamdown>{getTextFromMessage(message)}</Streamdown>
 									</div>
 								</div>
 								<Sources
