@@ -131,9 +131,11 @@ export const upsertResource = async (input: unknown) => {
 					);
 
 				// Parent chunks must exist before child embeddings (FK parent_id).
-				await tx.insert(parentChunks).values(parents);
+				// A page can yield zero chunks (near-empty content), so guard against
+				// values([]), which Drizzle rejects with "at least one value".
+				if (parents.length > 0) await tx.insert(parentChunks).values(parents);
 
-				await tx.insert(embeddingsTable).values(embeddings);
+				if (embeddings.length > 0) await tx.insert(embeddingsTable).values(embeddings);
 			});
 
 			return {
@@ -249,9 +251,11 @@ export const upsertPdfResource = async (input: unknown) => {
 					);
 
 				// Parent chunks must exist before child embeddings (FK parent_id).
-				await tx.insert(parentChunks).values(parents);
+				// A page can yield zero chunks (near-empty content), so guard against
+				// values([]), which Drizzle rejects with "at least one value".
+				if (parents.length > 0) await tx.insert(parentChunks).values(parents);
 
-				await tx.insert(embeddingsTable).values(embeddings);
+				if (embeddings.length > 0) await tx.insert(embeddingsTable).values(embeddings);
 			});
 
 			return {

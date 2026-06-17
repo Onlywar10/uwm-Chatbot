@@ -235,7 +235,9 @@ export async function updateCrawlJobSuccess(
 				status: "success",
 				time: time.toString(),
 				contentSnapshot,
-				resourceId: resourceId,
+				// Empty when the page had no indexable content (skipped upsert);
+				// store null rather than "" so the resources FK stays valid.
+				resourceId: resourceId || null,
 			})
 			.where(eq(crawlJobs.id, crawlJobId));
 

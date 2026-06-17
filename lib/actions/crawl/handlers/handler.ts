@@ -62,42 +62,49 @@ export async function processPage(
 			const result = await processGoogleDocs(url);
 			if (!result.ok) throw new Error(result.error);
 
-			const resource = await upsertResource({
-				domain,
-				url,
-				entityId,
-				content: result.content,
-				crawlSettingId,
-				pageTitle: "",
-				file_type: "html",
-				categories: {},
-			});
-
-			if (!resource.ok) throw new Error(resource.error);
-
 			fileType = "doc";
 			contentSnapshot = result.content;
-			resourceId = resource.resourceId;
+
+			if (result.content.trim().length > 0) {
+				const resource = await upsertResource({
+					domain,
+					url,
+					entityId,
+					content: result.content,
+					crawlSettingId,
+					pageTitle: "",
+					file_type: "html",
+					categories: {},
+				});
+
+				if (!resource.ok) throw new Error(resource.error);
+				resourceId = resource.resourceId;
+			}
 		} else {
 			const result = await processHtml(url, response, maxCharsPerPage);
 			if (!result.ok) throw new Error(result.error);
 
-			const resource = await upsertResource({
-				domain,
-				url,
-				entityId,
-				content: result.content,
-				crawlSettingId,
-				pageTitle: result.pageTitle,
-				file_type: "html",
-				categories: result.categories,
-			});
-
-			if (!resource.ok) throw new Error(resource.error);
-
 			fileType = "html";
 			contentSnapshot = result.content;
-			resourceId = resource.resourceId;
+
+			// Skip pages with no extractable text (e.g. JS-only pages that render
+			// empty without rendering): not an error, just nothing to index. Link
+			// discovery still runs in the caller for the html fileType.
+			if (result.content.trim().length > 0) {
+				const resource = await upsertResource({
+					domain,
+					url,
+					entityId,
+					content: result.content,
+					crawlSettingId,
+					pageTitle: result.pageTitle,
+					file_type: "html",
+					categories: result.categories,
+				});
+
+				if (!resource.ok) throw new Error(resource.error);
+				resourceId = resource.resourceId;
+			}
 		}
 
 		return {

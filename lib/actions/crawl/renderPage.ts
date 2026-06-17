@@ -47,12 +47,23 @@ async function launchBrowser(): Promise<Browser> {
 
 async function getBrowser(): Promise<Browser> {
 	if (browserPromise) {
-		const existing = await browserPromise;
-		if (existing.connected) return existing;
+		try {
+			const existing = await browserPromise;
+			if (existing.connected) return existing;
+		} catch {
+			// A previously cached launch failed — fall through and relaunch.
+		}
 		browserPromise = null;
 	}
-	browserPromise = launchBrowser();
-	return browserPromise;
+
+	const pending = launchBrowser();
+	browserPromise = pending;
+	// Never cache a rejected launch, or every later render fails instantly with
+	// the stale error. Clear it so the next call retries from scratch.
+	pending.catch(() => {
+		if (browserPromise === pending) browserPromise = null;
+	});
+	return pending;
 }
 
 /**
