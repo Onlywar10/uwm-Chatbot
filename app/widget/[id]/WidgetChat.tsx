@@ -78,7 +78,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 									{getTextFromMessage(message)}
 								</div>
 							</div>
-						) : (
+						) : getTextFromMessage(message) ? (
 							<div className="flex flex-col items-start">
 								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
 									<div className="chat-md text-sm text-neutral-800 leading-relaxed">
@@ -94,6 +94,20 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 										turnId={(message.metadata as { turnId: string }).turnId}
 									/>
 								)}
+							</div>
+						) : (
+							// Assistant message exists (sources/metadata may have arrived) but no
+							// text has streamed yet — keep showing a loading indicator instead of
+							// an empty bubble, right up until the first text token renders.
+							<div className="flex justify-start">
+								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 text-sm text-neutral-500">
+									<div className="flex items-center gap-2">
+										<div className="animate-spin text-neutral-400">
+											<LoadingIcon />
+										</div>
+										<span>Generating...</span>
+									</div>
+								</div>
 							</div>
 						)}
 					</div>
