@@ -6,16 +6,19 @@ import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
 import { convertToModelMessages, generateText, Output, streamText, type UIMessage } from "ai";
 import { z } from "zod";
+import type { ChatSource } from "@/lib/types/chat";
 
-export const maxDuration = 30;
+// gpt-5 streams the final answer slower than 4o-mini, so allow more room.
+export const maxDuration = 60;
 
-const chatModel = "openai/gpt-4o-mini";
-const TOP_K = 4;
+// Cheap model for internal retrieval-query generation.
+const queryModel = "openai/gpt-4o-mini";
+// Stronger model that composes the user-facing answer.
+const composerModel = "openai/gpt-5";
+// Max retrieved chunks surfaced to the model after cross-query dedup.
+const TOP_K = 8;
 
-const ALLOWED_ORIGINS = new Set([
-	"https://www.unitedwaymerced.org",
-	"https://www.211merced.org",
-]);
+const ALLOWED_ORIGINS = new Set(["https://www.unitedwaymerced.org", "https://www.211merced.org"]);
 
 function getCorsHeaders(req: Request): Record<string, string> {
 	const origin = req.headers.get("origin") ?? "";
@@ -34,7 +37,12 @@ export async function OPTIONS(req: Request) {
 	return new Response(null, { status: 204, headers: getCorsHeaders(req) });
 }
 
-type RetrievalHit = { name: string; similarity: number };
+type RetrievalHit = {
+	name: string;
+	similarity: number;
+	sourceUrl?: string;
+	metadata?: { pageTitle?: string };
+};
 
 function getDomainFromRequest(req: Request): string | null {
 	let devOverride = "";
@@ -115,7 +123,7 @@ export async function POST(req: Request) {
 
 	const startQueryGen = performance.now();
 	const queryGen = await generateText({
-		model: chatModel,
+		model: queryModel,
 		system:
 			"You generate retrieval queries for a website knowledge base. " + "Return ONLY valid JSON.",
 		prompt:
@@ -158,24 +166,51 @@ export async function POST(req: Request) {
 			: unique
 					.map(
 						(hit: RetrievalHit, i: number) =>
-							`[#${i + 1} score=${hit.similarity.toFixed(3)}]\n${hit.name}`,
+							`[#${i + 1} score=${hit.similarity.toFixed(3)}]\n` +
+							`${hit.sourceUrl ? `[Source: ${hit.sourceUrl}]\n` : ""}${hit.name}`,
 					)
 					.join("\n\n---\n\n");
 
-	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced.
+	// Dedup the retrieved pages by URL into a sources list for the UI (skip the
+	// synthetic school-directory resource, which isn't a real page).
+	const sources: ChatSource[] = Array.from(
+		new Map(
+			unique
+				.filter((hit) => hit.sourceUrl && !hit.sourceUrl.endsWith("/__directory"))
+				.map((hit) => [
+					hit.sourceUrl as string,
+					{
+						url: hit.sourceUrl as string,
+						title: hit.metadata?.pageTitle || (hit.sourceUrl as string),
+					},
+				]),
+		).values(),
+	);
 
-    Rules:
-    - Use the Context below to anwser a user's question to the best of your ability.
-	- If all Context is irrevelvent to the user's question respond with Sorry I dont Know
-    Context:
-    ${context || "(empty)"}
-    `;
+	const systemPrompt = `You are a helpful assistant answering questions about topics relating to United Way of Merced and the 211 Merced community resource directory.
+
+Rules:
+- Answer the user's question using ONLY the Context below. Do not use outside knowledge and do not guess.
+- Be a direct Q&A assistant, not an intake interview. Just answer the question from the Context. Do NOT ask the user to share their situation, eligibility, health plan, location, or other personal details as a prerequisite, and do not end replies offering to help "if you tell me more." If the Context covers several cases, briefly give the answer for each rather than asking which one applies.
+- Only ask a clarifying question when the question is genuinely ambiguous AND you cannot give a useful answer from the Context for any reasonable reading of it. Default to answering.
+- If the Context does not answer the question, START your reply with "Sorry," and briefly say what you could not find. Reserve a leading "Sorry," only for these no-answer cases, never as polite filler.
+- When the user is looking for a page or resource (e.g. "where do I donate?", "the application form"), point them to it with a link. Only use links that appear in the Context (the page's own URL or links within it — internal pages or external resources); prefer the most specific one and do not invent URLs.
+
+Formatting (your reply is rendered as markdown):
+- Default to brief, natural prose in short paragraphs. This is a small chat window — keep it concise.
+- Use a bullet list ("- ") ONLY when presenting 3 or more distinct items, resources, or steps. Never put normal explanatory sentences or a single item in a list.
+- Use **bold** sparingly for a key name, phone number, or label. Use headings ("### ") only for a long, multi-section answer.
+- When you reference a page, link to it ONCE as a clean descriptive markdown link, e.g. [Over the Edge details](https://example.org/overtheedge). Never paste raw URLs, and never include the literal "[Source: …]" labels from the Context in your reply — those are internal.
+
+Context:
+${context || "(empty)"}
+`;
 
 	const turnId = nanoid();
 	const startLlm = performance.now();
 
 	const result = streamText({
-		model: chatModel,
+		model: composerModel,
 		messages: modelMessages,
 		system: systemPrompt,
 		onFinish: async ({ text }) => {
@@ -188,19 +223,19 @@ export async function POST(req: Request) {
 				id: turnId,
 				timestamp: new Date(),
 				domain,
-				status: text.includes("Sorry, I don't know") ? "no-answer" : "answered",
+				status: text.trimStart().startsWith("Sorry,") ? "no-answer" : "answered",
 				latency: {
 					total: Math.round(endTotal - startTotal),
 					queryGen: Math.round(endQueryGen - startQueryGen),
 					retrieval: Math.round(endRetrieval - startRetrieval),
 					llm: Math.round(endTotal - startLlm),
 				},
-				model: chatModel,
+				model: composerModel,
 				tokens: {
 					input: inputTokens,
 					output: outputTokens,
 				},
-				estimatedCost: calculateCost(chatModel, inputTokens, outputTokens),
+				estimatedCost: calculateCost(composerModel, inputTokens, outputTokens),
 				retrieval: {
 					topK: TOP_K,
 					chunksReturned: unique.length,
@@ -223,7 +258,7 @@ export async function POST(req: Request) {
 
 	return result.toUIMessageStreamResponse({
 		messageMetadata: ({ part }) => {
-			if (part.type === "start") return { turnId };
+			if (part.type === "start") return { turnId, sources };
 		},
 	});
 }

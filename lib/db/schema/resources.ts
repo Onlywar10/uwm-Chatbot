@@ -5,7 +5,6 @@ import type { z } from "zod";
 
 import { nanoid } from "@/lib/utils";
 import { crawlSettings } from "./crawlSettings";
-import { schools } from "./schools";
 
 export const resources = pgTable(
 	"resources",
@@ -16,6 +15,7 @@ export const resources = pgTable(
 
 		domain: varchar("domain", { length: 255 }).notNull(),
 		url: varchar("url", { length: 1024 }).notNull(),
+		entityId: varchar("entity_id", { length: 191 }).notNull(),
 
 		content: text("content").notNull(),
 
@@ -31,10 +31,6 @@ export const resources = pgTable(
 		crawlSettingId: varchar("crawl_setting_id", { length: 191 })
 			.notNull()
 			.references(() => crawlSettings.id, { onDelete: "cascade" }),
-
-		schoolId: varchar("school_id", { length: 191 })
-			.notNull()
-			.references(() => schools.id),
 	},
 	(t) => [
 		unique("resources_domain_url_unique").on(t.domain, t.url),

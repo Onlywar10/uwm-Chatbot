@@ -22,10 +22,9 @@ export const users = pgTable("users", {
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-
 export const insertUserSchema = createInsertSchema(users).omit({
 	id: true,
-	createdAt: true, 
+	createdAt: true,
 });
 
 export type NewUserParams = z.infer<typeof insertUserSchema>;

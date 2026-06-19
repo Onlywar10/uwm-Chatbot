@@ -17,6 +17,7 @@ export default async function WidgetPage({ params }: { params: Promise<{ id: str
 				name: widget.name,
 				domains: widget.domains,
 				greeting: widget.greeting,
+				suggestedQuestions: widget.suggestedQuestions,
 				accentColor: widget.accentColor,
 			}}
 		/>

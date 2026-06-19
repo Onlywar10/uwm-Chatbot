@@ -10,6 +10,7 @@ import {
 	reCrawlDomain,
 	reIndexPage,
 } from "@/lib/actions/admin";
+import { cancelCrawl } from "@/lib/actions/crawl/crawlRun";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -22,12 +23,15 @@ type DomainResourceRow = {
 };
 
 type CrawlSettings = {
+	id: string;
 	maxDepth: number;
 	maxPages: number;
 	maxCharsPerPage: number;
 	includeSitemapSeeds: boolean;
 	ignoreRobots: boolean;
 	dropAllQuery: boolean;
+	renderJavascript: boolean;
+	crawlAllPages: boolean;
 	urlsToIgnore: string[];
 };
 
@@ -60,14 +64,13 @@ export default function AdminDomainClient({
 	);
 	const [ignoreRobots, setIgnoreRobots] = useState(crawlSettings[0].ignoreRobots);
 	const [dropAllQuery, setDropAllQuery] = useState(crawlSettings[0].dropAllQuery);
+	const [renderJavascript, setRenderJavascript] = useState(crawlSettings[0].renderJavascript);
+	const [crawlAllPages, setCrawlAllPages] = useState(crawlSettings[0].crawlAllPages);
 	const [maxDepth, setMaxDepth] = useState<number>(crawlSettings[0].maxDepth);
 	const [maxPages, setMaxPages] = useState<number>(crawlSettings[0].maxPages);
 	const [maxCharsPerPage, setMaxCharsPerPage] = useState<number>(crawlSettings[0].maxCharsPerPage);
 	const [newIgnoreUrl, setNewIgnoreUrl] = useState<string>("");
 	const [urlsToIgnore, setUrlsToIgnore] = useState<string[]>(crawlSettings[0].urlsToIgnore);
-
-	const [saveSettings, setSaveSettings] = useState<boolean>(false);
-	const [saveSucess, setSaveSuccess] = useState<boolean>(false);
 
 	const refresh = async () => {
 		const rows = await getDomainDetails(domain);
@@ -82,10 +85,24 @@ export default function AdminDomainClient({
 		await refresh();
 	};
 
+	const onStopCrawl = async () => {
+		setStatus("Stopping crawl...");
+		const result = await cancelCrawl(crawlSettings[0].id);
+		if (!result.ok) {
+			setStatus(result.error);
+			return;
+		}
+		setStatus(
+			result.cancelled > 0
+				? "Crawl stopping — in-progress jobs will wind down shortly."
+				: "No crawl is currently running for this domain.",
+		);
+		await refresh();
+	};
+
 	const onReCrawl = async (event: React.FormEvent) => {
 		event.preventDefault();
-		setStatus("Re-crawling...");
-		setSaveSuccess(false);
+		setStatus("Starting re-crawl...");
 		try {
 			const crawlResult = await reCrawlDomain({
 				domain,
@@ -96,18 +113,13 @@ export default function AdminDomainClient({
 				includeSitemapSeeds: includeSitemapSeeds,
 				ignoreRobots: ignoreRobots,
 				dropAllQuery: dropAllQuery,
+				renderJavascript: renderJavascript,
+				crawlAllPages: crawlAllPages,
 				urlsToIgnore: urlsToIgnore,
-				saveCrawlSettings: saveSettings,
 				schoolId: school.schoolId,
 			});
 
-			if (saveSettings) {
-				setSaveSuccess(true);
-			}
-
-			setSaveSettings(false);
-
-			setStatus(`${crawlResult.message} (pages: ${crawlResult.pagesProcessed})`);
+			setStatus(crawlResult.message);
 			await refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to re-crawl domain";
@@ -116,18 +128,14 @@ export default function AdminDomainClient({
 	};
 
 	const onReindex = async (url: string) => {
-		setStatus("Reindexing page...");
+		setStatus("Starting reindex...");
 		try {
 			const reindexResult = await reIndexPage({
 				domain,
 				url,
-				maxCharsPerPage: crawlSettings[0].maxCharsPerPage,
-				includeSitemapSeeds: crawlSettings[0].includeSitemapSeeds,
-				ignoreRobots: crawlSettings[0].ignoreRobots,
-				dropAllQuery: crawlSettings[0].dropAllQuery,
 				schoolId: school.schoolId,
 			});
-			setStatus(`${reindexResult.message} (pages: ${reindexResult.pagesProcessed})`);
+			setStatus(reindexResult.message);
 			await refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to reindex page";
@@ -162,6 +170,8 @@ export default function AdminDomainClient({
 		setIncludeSitemapSeeds(crawlSettings[0].includeSitemapSeeds);
 		setIgnoreRobots(crawlSettings[0].ignoreRobots);
 		setDropAllQuery(crawlSettings[0].dropAllQuery);
+		setRenderJavascript(crawlSettings[0].renderJavascript);
+		setCrawlAllPages(crawlSettings[0].crawlAllPages);
 		setMaxDepth(crawlSettings[0].maxDepth);
 		setMaxPages(crawlSettings[0].maxPages);
 		setMaxCharsPerPage(crawlSettings[0].maxCharsPerPage);
@@ -214,6 +224,10 @@ export default function AdminDomainClient({
 					<div className="flex gap-2">
 						<Button variant="destructive" onClick={onPurge}>
 							Purge
+						</Button>
+
+						<Button variant="outline" onClick={onStopCrawl}>
+							Stop crawl
 						</Button>
 
 						<form onSubmit={onReCrawl} className="flex gap-2 flex-1">
@@ -310,6 +324,33 @@ export default function AdminDomainClient({
 
 				<div className="flex items-center gap-2">
 					<input
+						id="renderJavascript"
+						type="checkbox"
+						checked={renderJavascript}
+						onChange={(event) => setRenderJavascript(event.target.checked)}
+					/>
+					<label
+						htmlFor="renderJavascript"
+						className="text-sm text-neutral-700 dark:text-neutral-300"
+					>
+						Render JavaScript (for JS-heavy sites)
+					</label>
+				</div>
+
+				<div className="flex items-center gap-2">
+					<input
+						id="crawlAllPages"
+						type="checkbox"
+						checked={crawlAllPages}
+						onChange={(event) => setCrawlAllPages(event.target.checked)}
+					/>
+					<label htmlFor="crawlAllPages" className="text-sm text-neutral-700 dark:text-neutral-300">
+						Crawl entire domain (ignore page/depth limits)
+					</label>
+				</div>
+
+				<div className="flex items-center gap-2">
+					<input
 						id="maxDepth"
 						type="number"
 						value={maxDepth}
@@ -386,26 +427,10 @@ export default function AdminDomainClient({
 				)}
 
 				<div className="flex items-center gap-2">
-					<input
-						id="saveSettings"
-						type="checkbox"
-						checked={saveSettings}
-						onChange={(event) => setSaveSettings(event.target.checked)}
-					/>
-					<label htmlFor="saveSettings" className="text-sm text-neutral-700 dark:text-neutral-300">
-						Save new crawl settings
-					</label>
-				</div>
-
-				<div className="flex items-center gap-2">
 					<Button onClick={resetConfigurations} variant="destructive">
 						Reset to Original Settings
 					</Button>
 				</div>
-
-				{saveSucess && (
-					<div className="text-green-500 text-center">Successfully saved settings ✓</div>
-				)}
 			</div>
 		</main>
 	);

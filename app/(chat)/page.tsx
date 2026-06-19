@@ -2,14 +2,16 @@
 
 import { FeedbackButtons } from "@/components/FeedbackButtons";
 import { LoadingIcon } from "@/components/icons";
+import { Sources } from "@/components/Sources";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { ChatSource } from "@/lib/types/chat";
 import { cn } from "@/lib/utils";
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { AnimatePresence, motion } from "framer-motion";
 import type React from "react";
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
 function deriveDomainKey(urlStr: string): string {
@@ -166,17 +168,15 @@ export default function Chat() {
 											{getTextFromMessage(userQuery)}
 										</div>
 										<AssistantMessage message={lastAssistantMessage} />
-										{(lastAssistantMessage.metadata as { turnId?: string })
-											?.turnId && (
+										<Sources
+											sources={
+												(lastAssistantMessage.metadata as { sources?: ChatSource[] })?.sources ?? []
+											}
+										/>
+										{(lastAssistantMessage.metadata as { turnId?: string })?.turnId && (
 											<FeedbackButtons
-												key={
-													(lastAssistantMessage.metadata as { turnId: string })
-														.turnId
-												}
-												turnId={
-													(lastAssistantMessage.metadata as { turnId: string })
-														.turnId
-												}
+												key={(lastAssistantMessage.metadata as { turnId: string }).turnId}
+												turnId={(lastAssistantMessage.metadata as { turnId: string }).turnId}
 											/>
 										)}
 									</div>
@@ -202,10 +202,10 @@ function AssistantMessage({ message }: { message?: UIMessage }) {
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				exit={{ opacity: 0 }}
-				className="whitespace-pre-wrap font-mono text-sm text-neutral-800 dark:text-neutral-200 overflow-hidden"
+				className="chat-md text-sm leading-relaxed text-neutral-800 dark:text-neutral-200 overflow-hidden"
 				id="markdown"
 			>
-				<ReactMarkdown>{text}</ReactMarkdown>
+				<Streamdown>{text}</Streamdown>
 			</motion.div>
 		</AnimatePresence>
 	);

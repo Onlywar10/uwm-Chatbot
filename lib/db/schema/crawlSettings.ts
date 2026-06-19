@@ -1,7 +1,17 @@
 import { nanoid } from "@/lib/utils";
-import { pgTable, text, varchar, integer, timestamp, unique, boolean } from "drizzle-orm/pg-core";
+import {
+	pgTable,
+	text,
+	varchar,
+	boolean,
+	integer,
+	timestamp,
+	unique,
+	pgEnum,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { schools } from "./schools";
+
+export const entityTypeEnum = pgEnum("entity_type", ["district", "school"]);
 
 export const crawlSettings = pgTable(
 	"crawl_settings",
@@ -14,11 +24,16 @@ export const crawlSettings = pgTable(
 		useSitemaps: boolean("use_sitemaps").notNull(),
 		ignoreRobots: boolean("ignore_robots").notNull(),
 		dropAllQuery: boolean("drop_all_query").notNull(),
+		renderJavascript: boolean("render_javascript").notNull().default(false),
+		// When true, ignore maxCrawlDepth/maxCrawlPages and crawl the whole domain
+		// until the link frontier is exhausted (URL dedup guarantees termination).
+		crawlAllPages: boolean("crawl_all_pages").notNull().default(false),
 		maxCrawlDepth: integer("max_crawl_depth").notNull(),
 		maxCrawlPages: integer("max_crawl_pages").notNull(),
 		maxCharsPerPage: integer("max_chars_per_page").notNull(),
 		urlsToIgnore: text("urls_to_ignore").array().default(sql`'{}'::text[]`).notNull(),
-		pagesProcessed: integer("pages_processed").notNull().default(0),
+		entityType: entityTypeEnum("entity_type").notNull(),
+		entityId: varchar("entity_id", { length: 191 }).notNull(),
 
 		createdAt: timestamp("created_at").notNull().default(sql`now()`),
 
@@ -26,10 +41,6 @@ export const crawlSettings = pgTable(
 			.notNull()
 			.default(sql`now()`)
 			.$onUpdateFn(() => new Date()),
-
-		schoolId: varchar("school_id", { length: 191 })
-			.notNull()
-			.references(() => schools.id, { onDelete: "cascade" }),
 	},
 	(t) => [unique("crawl_settings_domain_unique").on(t.domain)],
 );

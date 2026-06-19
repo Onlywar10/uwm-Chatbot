@@ -1,11 +1,15 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Public surface that must work WITHOUT a Clerk session: the sign-in page, the
-// embedded chat widget + its API, and the QStash crawl webhook.
+// embedded chat widget + its API, the QStash crawl webhook, the headless-render
+// endpoint (guarded by RENDERER_AUTH_TOKEN), and the hourly crawl cron (guarded
+// by CRON_SECRET).
 const isPublicRoute = createRouteMatcher([
 	"/sign-in(.*)",
 	"/api/chat(.*)",
 	"/api/crawl(.*)",
+	"/api/render(.*)",
+	"/api/cron/crawl(.*)",
 	"/widget(.*)",
 ]);
 
