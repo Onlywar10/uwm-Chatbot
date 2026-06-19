@@ -13,6 +13,8 @@ export const widgetConfigs = pgTable("widget_configs", {
 
 	greeting: text("greeting"),
 
+	suggestedQuestions: text("suggested_questions").array().default(sql`'{}'::text[]`).notNull(),
+
 	accentColor: varchar("accent_color", { length: 9 }),
 
 	enabled: boolean("enabled").notNull().default(true),

@@ -7,8 +7,13 @@ import { widgetConfigs } from "@/lib/db/schema/widgetConfigs";
 const DEMO_WIDGET = {
 	id: "uwm-widget-001",
 	name: "UWM Demo Widget",
-	domains: ["www.unitedwaymerced.org"],
+	domains: ["www.unitedwaymerced.org", "www.freetaxesmerced.com"],
 	greeting: "Hi! How can I help you today?",
+	suggestedQuestions: [
+		"What is United Way of Merced?",
+		"I need help with my taxes",
+		"How can I help?",
+	],
 	accentColor: "#003DA5",
 	enabled: true,
 };
@@ -23,6 +28,7 @@ async function main() {
 				name: DEMO_WIDGET.name,
 				domains: DEMO_WIDGET.domains,
 				greeting: DEMO_WIDGET.greeting,
+				suggestedQuestions: DEMO_WIDGET.suggestedQuestions,
 				accentColor: DEMO_WIDGET.accentColor,
 				enabled: true,
 			},

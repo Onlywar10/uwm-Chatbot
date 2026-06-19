@@ -15,6 +15,7 @@ type WidgetConfig = {
 	name: string;
 	domains: string[];
 	greeting: string | null;
+	suggestedQuestions: string[];
 	accentColor: string | null;
 };
 
@@ -44,13 +45,17 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		}
 	}, [messages, status]);
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		const text = input.trim();
-		if (!text) return;
+	const submitText = (raw: string) => {
+		const text = raw.trim();
+		if (!text || isAwaitingResponse) return;
 
 		sendMessage({ text }, { body: { widgetId: widget.id } });
 		setInput("");
+	};
+
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		submitText(input);
 	};
 
 	// United Way of Merced brand blue (overridable per widget config).
@@ -64,6 +69,23 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 						<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
 							{widget.greeting}
 						</div>
+					</div>
+				)}
+
+				{messages.length === 0 && widget.suggestedQuestions.length > 0 && (
+					<div className="flex flex-col items-start gap-2">
+						{widget.suggestedQuestions.map((question) => (
+							<button
+								key={question}
+								type="button"
+								onClick={() => submitText(question)}
+								disabled={isAwaitingResponse}
+								className="rounded-full border px-3 py-1.5 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+								style={{ borderColor: accentColor, color: accentColor }}
+							>
+								{question}
+							</button>
+						))}
 					</div>
 				)}
 
