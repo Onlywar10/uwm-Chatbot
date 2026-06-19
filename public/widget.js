@@ -158,7 +158,11 @@
     iframe.setAttribute("title", title + " chat");
     Object.assign(iframe.style, {
       width: "100%",
-      flex: "1 1 auto",
+      // flex-basis 0 + min-height 0: the iframe takes its height purely from
+      // the (pixel-sized) panel, not from its own content. iOS WebKit otherwise
+      // sizes iframes to content height, which collapses/overflows the panel.
+      flex: "1 1 0%",
+      minHeight: "0",
       border: "none",
     });
 
@@ -188,15 +192,24 @@
     if (!panel) return;
 
     // Mobile: fill the viewport (minus margins) regardless of expanded state.
+    // Size in explicit pixels off window.inner* rather than calc(100% - 88px):
+    // a percentage height on a position:fixed element resolves unreliably on
+    // mobile browsers and can collapse the panel (header shows, iframe goes
+    // white). The resize listener re-runs this as the mobile chrome shows/hides.
     if (window.innerWidth < 500) {
+      // On a phone the panel already fills the screen, so expanding is
+      // meaningless — hide the expand button.
+      if (expandBtn) expandBtn.style.display = "none";
       Object.assign(panel.style, {
-        width: "calc(100% - 24px)",
-        height: "calc(100% - 88px)",
+        width: window.innerWidth - 24 + "px",
+        height: window.innerHeight - 88 + "px",
         right: "12px",
         bottom: "76px",
       });
       return;
     }
+
+    if (expandBtn) expandBtn.style.display = "flex";
 
     var factor = expanded ? EXPAND : 1;
     var maxW = window.innerWidth - 40;

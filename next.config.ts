@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const ALLOWED_ORIGINS = [
 	"https://www.unitedwaymerced.org",
 	"https://www.211merced.org",
+	"https://www.freetaxesmerced.com",
+	"https://freetaxesmerced.com",
 ];
 
 const nextConfig: NextConfig = {
