@@ -62,7 +62,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 	const accentColor = widget.accentColor || "#003DA5";
 
 	return (
-		<div className="flex flex-col h-dvh bg-white">
+		<div className="flex flex-col h-full bg-white">
 			<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
 				{widget.greeting && messages.length === 0 && (
 					<div className="flex justify-start">
