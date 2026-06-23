@@ -45,6 +45,15 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		}
 	}, [messages, status]);
 
+	// Handshake for the parent embed's diagnostics: tell the host page this
+	// iframe document actually mounted. Lets widget.js distinguish "iframe never
+	// loaded" from "loaded but blank". Harmless in normal (non-debug) operation.
+	useEffect(() => {
+		if (typeof window !== "undefined" && window.parent !== window) {
+			window.parent.postMessage({ type: "uwm-widget-ready" }, "*");
+		}
+	}, []);
+
 	const submitText = (raw: string) => {
 		const text = raw.trim();
 		if (!text || isAwaitingResponse) return;

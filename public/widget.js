@@ -7,10 +7,12 @@
 
   var origin = new URL(script.src).origin;
   var iframeUrl = origin + "/widget/" + widgetId;
-  // Forward ?debug=1 from the host page into the iframe so the in-iframe
-  // diagnostics overlay can be enabled without editing the embed. No-op for
-  // real embeds (their host URL won't carry the flag).
-  if (/[?&]debug=1(?:&|$)/.test(window.location.search)) {
+  // ?debug=1 on the HOST page url turns on diagnostics: it's forwarded into the
+  // iframe (in-iframe overlay) AND enables a parent-side handshake that reports
+  // whether the iframe actually loaded. No-op for real embeds (their host URL
+  // won't carry the flag).
+  var debug = /[?&]debug=1(?:&|$)/.test(window.location.search);
+  if (debug) {
     iframeUrl += "?debug=1";
   }
   // United Way of Merced brand blue (override per-embed with data-accent-color).
@@ -176,7 +178,68 @@
     panel.appendChild(iframe);
     document.body.appendChild(panel);
 
+    if (debug) attachParentDiagnostics(iframe);
+
     applySize();
+  }
+
+  // Parent-side (host page) diagnostics. Runs on the embedding page itself, so
+  // it's visible on mobile even when the iframe is BLOCKED from loading (a
+  // blocked iframe can't run the in-iframe overlay). Reports: did iframe.onload
+  // fire, did the widget page post its "ready" handshake, and the iframe's
+  // measured box size — which together separate "never loaded" from
+  // "loaded but collapsed to 0px".
+  function attachParentDiagnostics(iframe) {
+    var onloadFired = false;
+    var ready = false;
+    iframe.addEventListener("load", function () {
+      onloadFired = true;
+    });
+    window.addEventListener("message", function (e) {
+      if (e.origin === origin && e.data && e.data.type === "uwm-widget-ready") {
+        ready = true;
+      }
+    });
+
+    var box = document.createElement("div");
+    Object.assign(box.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      right: "0",
+      zIndex: "2147483647",
+      background: "rgba(0,0,0,0.88)",
+      color: "#0ff",
+      font: "11px/1.35 ui-monospace,Menlo,monospace",
+      padding: "6px 8px",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+      maxHeight: "45%",
+      overflow: "auto",
+    });
+    document.body.appendChild(box);
+
+    function render() {
+      var r = iframe.getBoundingClientRect();
+      box.textContent =
+        "[PARENT diag]\n" +
+        "host origin: " + window.location.origin + "\n" +
+        "iframe src: " + iframe.src + "\n" +
+        "iframe box: " + Math.round(r.width) + "x" + Math.round(r.height) + "\n" +
+        "onload fired: " + onloadFired + "\n" +
+        "widget ready ping: " + ready + "\n" +
+        (onloadFired && !ready
+          ? ">> iframe loaded but page never pinged: blocked/crashed/old-cache"
+          : !onloadFired
+            ? ">> iframe never loaded: framing blocked or network"
+            : ">> iframe loaded + ready: content runs, check in-iframe overlay");
+    }
+    render();
+    var n = 0;
+    var id = window.setInterval(function () {
+      render();
+      if (++n > 15) window.clearInterval(id);
+    }, 1000);
   }
 
   function toggle(open) {
