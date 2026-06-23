@@ -6,7 +6,9 @@ export default function WidgetLayout({ children }: { children: React.ReactNode }
 			    resolve to ~0 inside an iframe on iOS Safari and leave the chat blank.
 			    Scoped to this layout, so it only affects the /widget route's document. */}
 			<style>{"html,body{height:100%;margin:0}"}</style>
-			<div className="h-full bg-white text-neutral-900">{children}</div>
+			<div id="widget-root" className="h-full bg-white text-neutral-900">
+				{children}
+			</div>
 		</>
 	);
 }
