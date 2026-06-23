@@ -7,6 +7,12 @@
 
   var origin = new URL(script.src).origin;
   var iframeUrl = origin + "/widget/" + widgetId;
+  // Forward ?debug=1 from the host page into the iframe so the in-iframe
+  // diagnostics overlay can be enabled without editing the embed. No-op for
+  // real embeds (their host URL won't carry the flag).
+  if (/[?&]debug=1(?:&|$)/.test(window.location.search)) {
+    iframeUrl += "?debug=1";
+  }
   // United Way of Merced brand blue (override per-embed with data-accent-color).
   var accentColor = script.getAttribute("data-accent-color") || "#003DA5";
   var title = script.getAttribute("data-title") || "United Way of Merced";
