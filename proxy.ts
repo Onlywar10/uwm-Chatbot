@@ -26,7 +26,14 @@ export default clerkMiddleware(async (auth, req) => {
 export const config = {
 	matcher: [
 		// Skip Next.js internals and static files unless found in search params.
-		"/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+		// Also skip /widget entirely: it's the public, cross-site-embedded chat
+		// iframe. clerkMiddleware() runs a dev-browser "handshake" 307 redirect on
+		// every matched route (independent of route protection), which navigates
+		// the iframe to clerk.accounts.dev — a different origin that can't be
+		// framed and needs third-party cookies (blocked cross-site on iOS) — so
+		// the embedded widget renders blank. Excluding it keeps Clerk off the
+		// public surface entirely.
+		"/((?!_next|widget|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
 		// Always run for API routes.
 		"/(api|trpc)(.*)",
 	],
