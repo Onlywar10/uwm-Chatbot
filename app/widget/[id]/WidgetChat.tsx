@@ -45,15 +45,6 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		}
 	}, [messages, status]);
 
-	// Handshake for the parent embed's diagnostics: tell the host page this
-	// iframe document actually mounted. Lets widget.js distinguish "iframe never
-	// loaded" from "loaded but blank". Harmless in normal (non-debug) operation.
-	useEffect(() => {
-		if (typeof window !== "undefined" && window.parent !== window) {
-			window.parent.postMessage({ type: "uwm-widget-ready" }, "*");
-		}
-	}, []);
-
 	const submitText = (raw: string) => {
 		const text = raw.trim();
 		if (!text || isAwaitingResponse) return;
@@ -71,7 +62,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 	const accentColor = widget.accentColor || "#003DA5";
 
 	return (
-		<div id="widget-chat" className="flex flex-col h-full bg-white">
+		<div className="flex flex-col h-full bg-white">
 			<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
 				{widget.greeting && messages.length === 0 && (
 					<div className="flex justify-start">
