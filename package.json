@@ -16,6 +16,7 @@
 		"db:studio": "drizzle-kit studio",
 		"db:check": "drizzle-kit check",
 		"db:import": "tsx lib/import/index.ts",
+		"db:sync-directory": "tsx lib/directory/cli.ts",
 		"db:seed-widget": "tsx scripts/seed-demo-widget.ts",
 		"verify:queries": "tsx scripts/verify/index.ts"
 	},
