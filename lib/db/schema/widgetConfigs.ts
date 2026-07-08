@@ -19,6 +19,10 @@ export const widgetConfigs = pgTable("widget_configs", {
 
 	enabled: boolean("enabled").notNull().default(true),
 
+	// Opt-in 211 resource referral mode (lib/directory/ tools + intake prompt).
+	// Off by default so school-district tenants never see social-service intake.
+	enableResourceSearch: boolean("enable_resource_search").notNull().default(false),
+
 	createdAt: timestamp("created_at").notNull().default(sql`now()`),
 
 	updatedAt: timestamp("updated_at")

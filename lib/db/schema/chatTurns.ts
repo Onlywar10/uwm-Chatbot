@@ -38,6 +38,18 @@ export type PromptJson = {
 	userMessage: string;
 };
 
+export type ReferralJson = {
+	crisisDetected?: boolean;
+	toolCalls?: {
+		tool: string;
+		input: unknown;
+		resultCount: number;
+		/** directory_programs row ids shown to the user (the rendered cards) */
+		programIds?: string[];
+		error?: string;
+	}[];
+};
+
 export const chatTurns = pgTable(
 	"chat_turns",
 	{
@@ -64,6 +76,10 @@ export const chatTurns = pgTable(
 		prompt: jsonb("prompt").$type<PromptJson>().notNull(),
 
 		response: text("response").notNull(),
+
+		// Resource-referral telemetry (tool calls, crisis flag; later: card
+		// click beacons). Null for turns on widgets without resource search.
+		referral: jsonb("referral").$type<ReferralJson | null>(),
 	},
 	(t) => [
 		index("chat_turns_domain_idx").on(t.domain),

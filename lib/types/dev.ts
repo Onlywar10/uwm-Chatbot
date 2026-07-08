@@ -1,3 +1,5 @@
+import type { ReferralJson } from "@/lib/db/schema/chatTurns";
+
 export type TurnStatus = "answered" | "no-answer" | "error";
 
 export type RetrievedChunk = {
@@ -33,4 +35,6 @@ export type DevTurn = {
 		userMessage: string;
 	};
 	response: string;
+	/** Resource-referral telemetry; absent for widgets without resource search. */
+	referral?: ReferralJson | null;
 };

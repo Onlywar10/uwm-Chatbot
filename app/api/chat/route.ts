@@ -2,14 +2,25 @@ import { findRelevantContentForDomain, findRelevantContentForDomains } from "@/l
 import { getWidget } from "@/lib/actions/widgetConfigs";
 import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
+import { CRISIS_TURN_CONTEXT, detectCrisis } from "@/lib/directory/crisis";
+import { REFERRAL_PROMPT_SECTION } from "@/lib/directory/prompt";
+import { createDirectoryTools, type DirectoryToolLog } from "@/lib/directory/tools";
 import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
-import { convertToModelMessages, generateText, Output, streamText, type UIMessage } from "ai";
+import {
+	convertToModelMessages,
+	generateText,
+	Output,
+	stepCountIs,
+	streamText,
+	type UIMessage,
+} from "ai";
 import { z } from "zod";
 import type { ChatSource } from "@/lib/types/chat";
 
-// gpt-5 streams the final answer slower than 4o-mini, so allow more room.
-export const maxDuration = 60;
+// gpt-5 streams the final answer slower than 4o-mini, and resource-enabled
+// widgets may take several tool steps before composing.
+export const maxDuration = 120;
 
 // Cheap model for internal retrieval-query generation.
 const queryModel = "openai/gpt-4o-mini";
@@ -105,6 +116,7 @@ export async function POST(req: Request) {
 
 	let domain: string;
 	let widgetDomains: string[] | null = null;
+	let resourceSearchEnabled = false;
 
 	if (widgetId) {
 		const widget = await getWidget(widgetId);
@@ -113,11 +125,17 @@ export async function POST(req: Request) {
 		}
 		widgetDomains = widget.domains;
 		domain = `widget:${widgetId}`;
+		resourceSearchEnabled = widget.enableResourceSearch;
 	} else {
 		domain = getDomainFromRequest(req) ?? "unknown";
 	}
 
 	const userText = lastUserText;
+
+	// Deterministic crisis screen (resource-enabled widgets only): a hit tells
+	// the client to render the static crisis card immediately, and the model
+	// gets crisis context injected — it still answers (see lib/directory/crisis).
+	const crisisDetected = resourceSearchEnabled && detectCrisis(userText);
 
 	const modelMessages = await convertToModelMessages(trimmedMessages);
 
@@ -201,18 +219,22 @@ Formatting (your reply is rendered as markdown):
 - Use a bullet list ("- ") ONLY when presenting 3 or more distinct items, resources, or steps. Never put normal explanatory sentences or a single item in a list.
 - Use **bold** sparingly for a key name, phone number, or label. Use headings ("### ") only for a long, multi-section answer.
 - When you reference a page, link to it ONCE as a clean descriptive markdown link, e.g. [Over the Edge details](https://example.org/overtheedge). Never paste raw URLs, and never include the literal "[Source: …]" labels from the Context in your reply — those are internal.
-
+${resourceSearchEnabled ? REFERRAL_PROMPT_SECTION : ""}${crisisDetected ? `\n${CRISIS_TURN_CONTEXT}\n` : ""}
 Context:
 ${context || "(empty)"}
 `;
 
 	const turnId = nanoid();
 	const startLlm = performance.now();
+	const toolLog: DirectoryToolLog[] = [];
 
 	const result = streamText({
 		model: composerModel,
 		messages: modelMessages,
 		system: systemPrompt,
+		...(resourceSearchEnabled
+			? { tools: createDirectoryTools(toolLog), stopWhen: stepCountIs(5) }
+			: {}),
 		onFinish: async ({ text }) => {
 			const endTotal = performance.now();
 
@@ -250,6 +272,7 @@ ${context || "(empty)"}
 					userMessage: userText,
 				},
 				response: text,
+				referral: resourceSearchEnabled ? { crisisDetected, toolCalls: toolLog } : null,
 			};
 
 			await addTurn(turn);
@@ -258,7 +281,7 @@ ${context || "(empty)"}
 
 	return result.toUIMessageStreamResponse({
 		messageMetadata: ({ part }) => {
-			if (part.type === "start") return { turnId, sources };
+			if (part.type === "start") return { turnId, sources, crisis: crisisDetected || undefined };
 		},
 	});
 }

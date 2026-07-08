@@ -7,11 +7,7 @@ import { z } from "zod";
 import { requireRole } from "../auth/guards";
 
 export async function getWidget(id: string) {
-	const rows = await db
-		.select()
-		.from(widgetConfigs)
-		.where(eq(widgetConfigs.id, id))
-		.limit(1);
+	const rows = await db.select().from(widgetConfigs).where(eq(widgetConfigs.id, id)).limit(1);
 
 	return rows[0] ?? null;
 }
@@ -24,6 +20,7 @@ const insertWidgetSchema = z.object({
 		.string()
 		.regex(/^#[0-9a-fA-F]{6,8}$/)
 		.optional(),
+	enableResourceSearch: z.boolean().optional(),
 });
 
 export async function addWidget(input: unknown) {
