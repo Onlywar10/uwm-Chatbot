@@ -3,12 +3,15 @@
 import { FeedbackButtons } from "@/components/FeedbackButtons";
 import { LoadingIcon } from "@/components/icons";
 import { Sources } from "@/components/Sources";
+import type { DirectorySearchResult } from "@/lib/directory/search";
 import type { ChatSource } from "@/lib/types/chat";
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
+import { CrisisCard } from "./CrisisCard";
+import { ResourceCards, ResourceCardsSkeleton } from "./ResourceCards";
 
 type WidgetConfig = {
 	id: string;
@@ -25,6 +28,24 @@ function getTextFromMessage(message: UIMessage): string {
 		.map((part) => part.text)
 		.join(" ")
 		.trim();
+}
+
+type MessageMeta = { turnId?: string; sources?: ChatSource[]; crisis?: boolean };
+
+type SearchToolPart = {
+	type: "tool-searchResources";
+	state?: "input-streaming" | "input-available" | "output-available" | "output-error";
+	output?: DirectorySearchResult | { error: string };
+};
+
+/**
+ * The last searchResources tool part of a message — the one whose results the
+ * model narrated. Earlier searches in the same multi-step turn stay hidden so
+ * the user never sees two competing card sets.
+ */
+function getSearchPart(message: UIMessage): SearchToolPart | null {
+	const parts = message.parts.filter((part) => part.type === "tool-searchResources");
+	return (parts[parts.length - 1] as unknown as SearchToolPart | undefined) ?? null;
 }
 
 export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
@@ -89,10 +110,10 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 					</div>
 				)}
 
-				{messages.map((message) => (
-					<div key={message.id}>
-						{message.role === "user" ? (
-							<div className="flex justify-end">
+				{messages.map((message) => {
+					if (message.role === "user") {
+						return (
+							<div key={message.id} className="flex justify-end">
 								<div
 									className="rounded-lg rounded-tr-none px-3 py-2 max-w-[85%] text-sm text-white"
 									style={{ backgroundColor: accentColor }}
@@ -100,28 +121,29 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 									{getTextFromMessage(message)}
 								</div>
 							</div>
-						) : getTextFromMessage(message) ? (
-							<div className="flex flex-col items-start">
-								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
-									<div className="chat-md text-sm text-neutral-800 leading-relaxed">
-										<Streamdown>{getTextFromMessage(message)}</Streamdown>
-									</div>
-								</div>
-								<Sources
-									sources={(message.metadata as { sources?: ChatSource[] })?.sources ?? []}
-								/>
-								{(message.metadata as { turnId?: string })?.turnId && (
-									<FeedbackButtons
-										key={(message.metadata as { turnId: string }).turnId}
-										turnId={(message.metadata as { turnId: string }).turnId}
-									/>
-								)}
-							</div>
-						) : (
-							// Assistant message exists (sources/metadata may have arrived) but no
-							// text has streamed yet — keep showing a loading indicator instead of
-							// an empty bubble, right up until the first text token renders.
-							<div className="flex justify-start">
+						);
+					}
+
+					const text = getTextFromMessage(message);
+					const meta = message.metadata as MessageMeta | undefined;
+					const searchPart = getSearchPart(message);
+					const searchResult =
+						searchPart?.state === "output-available" &&
+						searchPart.output &&
+						!("error" in searchPart.output)
+							? searchPart.output
+							: null;
+					const searchPending =
+						searchPart != null &&
+						searchPart.state !== "output-available" &&
+						searchPart.state !== "output-error";
+
+					if (!text && !meta?.crisis && !searchPart) {
+						// Assistant message exists (sources/metadata may have arrived) but no
+						// text has streamed yet — keep showing a loading indicator instead of
+						// an empty bubble, right up until the first text token renders.
+						return (
+							<div key={message.id} className="flex justify-start">
 								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 text-sm text-neutral-500">
 									<div className="flex items-center gap-2">
 										<div className="animate-spin text-neutral-400">
@@ -131,9 +153,33 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 									</div>
 								</div>
 							</div>
-						)}
-					</div>
-				))}
+						);
+					}
+
+					return (
+						<div key={message.id} className="flex flex-col items-start">
+							{meta?.crisis && <CrisisCard />}
+							{text && (
+								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
+									<div className="chat-md text-sm text-neutral-800 leading-relaxed">
+										<Streamdown>{text}</Streamdown>
+									</div>
+								</div>
+							)}
+							{searchPending && <ResourceCardsSkeleton />}
+							{searchResult && (
+								<ResourceCards
+									result={searchResult}
+									accentColor={accentColor}
+									onShowMore={() => submitText("Show me more options")}
+									disabled={isAwaitingResponse}
+								/>
+							)}
+							<Sources sources={meta?.sources ?? []} />
+							{meta?.turnId && <FeedbackButtons key={meta.turnId} turnId={meta.turnId} />}
+						</div>
+					);
+				})}
 
 				{isAwaitingResponse && messages[messages.length - 1]?.role === "user" && (
 					<div className="flex justify-start">
