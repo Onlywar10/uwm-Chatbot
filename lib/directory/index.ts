@@ -1,9 +1,8 @@
-import { openai } from "@ai-sdk/openai";
 import { db } from "@/lib/db";
 import { directoryPrograms } from "@/lib/db/schema/directoryPrograms";
 import { directoryTaxonomy } from "@/lib/db/schema/directoryTaxonomy";
-import { env } from "@/lib/env.mjs";
-import { embedMany, type EmbeddingModel } from "ai";
+import { embedMany } from "ai";
+import { embeddingModel } from "./embedding";
 import { fetchDetails, fetchTaxonomyTerms, sweepResources, type ICarolResource } from "./icarol";
 import { loadDirectory } from "./load";
 import {
@@ -13,13 +12,6 @@ import {
 	type TaxonomyInfo,
 } from "./transform";
 
-// Same gateway-vs-direct resolution as lib/analytics/model.ts: with
-// OPENAI_API_KEY set (local dev) talk to OpenAI directly, else use the bare
-// gateway string like the rest of the app.
-function embeddingModel(): EmbeddingModel<string> {
-	if (env.OPENAI_API_KEY) return openai.textEmbeddingModel("text-embedding-3-small");
-	return "text-embedding-3-small";
-}
 const EMBED_BATCH = 200;
 
 export type SyncStats = {
