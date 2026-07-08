@@ -4,6 +4,10 @@
 		{
 			"path": "/api/cron/crawl",
 			"schedule": "0 * * * *"
+		},
+		{
+			"path": "/api/cron/directory-sync",
+			"schedule": "0 9 * * *"
 		}
 	],
 	"functions": {
