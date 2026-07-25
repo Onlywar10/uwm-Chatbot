@@ -8,6 +8,8 @@
 		"start": "next start",
 		"lint": "biome check",
 		"format": "biome format --write",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "tsx lib/db/migrate.ts",
 		"db:drop": "drizzle-kit drop",
@@ -16,8 +18,12 @@
 		"db:studio": "drizzle-kit studio",
 		"db:check": "drizzle-kit check",
 		"db:import": "tsx lib/import/index.ts",
+		"db:sync-directory": "tsx lib/directory/cli.ts",
 		"db:seed-widget": "tsx scripts/seed-demo-widget.ts",
-		"verify:queries": "tsx scripts/verify/index.ts"
+		"verify:queries": "tsx scripts/verify/index.ts",
+		"eval:directory": "tsx scripts/eval-directory.ts",
+		"eval:relevance": "tsx scripts/eval-relevance.ts",
+		"db:backfill-areas": "tsx scripts/backfill-service-areas.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^3.0.65",
@@ -33,6 +39,7 @@
 		"@truto/turndown-plugin-gfm": "^1.0.2",
 		"@upstash/qstash": "^2.9.0",
 		"ai": "^6.0.33",
+		"botid": "^1.5.11",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"csv-parse": "^6.2.1",
@@ -52,6 +59,7 @@
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
 		"react-markdown": "^10.1.0",
+		"server-only": "^0.0.1",
 		"shadcn": "^3.6.3",
 		"sonner": "^2.0.7",
 		"streamdown": "^2.5.0",
@@ -75,7 +83,8 @@
 		"puppeteer": "^25.1.0",
 		"tailwindcss": "^4.1.18",
 		"tsx": "^4.21.0",
-		"typescript": "^5.9.3"
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.10"
 	},
 	"engines": {
 		"node": "24.x",

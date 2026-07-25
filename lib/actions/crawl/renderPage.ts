@@ -1,5 +1,7 @@
 import type { Browser } from "puppeteer-core";
 import { env } from "@/lib/env.mjs";
+import { assertUrlAllowed } from "@/lib/net/ssrf";
+import { CRAWLER_USER_AGENT } from "../crawlDefaults";
 
 // Headless-Chromium render core, shared by the /api/render route (called by the
 // crawler) and the /dev Renderer tester (called in-process).
@@ -74,15 +76,32 @@ export async function renderPage(
 	url: string,
 	opts?: { waitUntil?: typeof DEFAULT_WAIT_UNTIL; timeoutMs?: number },
 ): Promise<string> {
+	// SSRF guard: reject a private/loopback/metadata target before launching a nav.
+	await assertUrlAllowed(url);
+
 	const browser = await getBrowser();
 	const page = await browser.newPage();
 
 	try {
+		// Self-identify to the target server, matching the static-fetch crawler UA.
+		await page.setUserAgent(CRAWLER_USER_AGENT);
+
 		// Skip assets we never extract text from — a big render-time win.
 		await page.setRequestInterception(true);
 		page.on("request", (req) => {
-			if (BLOCKED_RESOURCES.has(req.resourceType())) req.abort();
-			else req.continue();
+			if (BLOCKED_RESOURCES.has(req.resourceType())) {
+				req.abort();
+				return;
+			}
+			// Re-check navigations (the initial goto and any redirect hop) against the
+			// SSRF guard so a redirect can't steer the browser at an internal host.
+			if (req.isNavigationRequest()) {
+				assertUrlAllowed(req.url())
+					.then(() => req.continue())
+					.catch(() => req.abort());
+				return;
+			}
+			req.continue();
 		});
 
 		await page.goto(url, {

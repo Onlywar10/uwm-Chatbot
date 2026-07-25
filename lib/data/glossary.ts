@@ -26,6 +26,24 @@ export const glossary: GlossaryEntry[] = [
 		note: "Only the 'children under 5 in household' signal exists. Misses parents whose children are all 6+. Field collected only from Oct-2025 — say so for earlier ranges.",
 	},
 	{
+		term: "after hours / evenings and weekends / call center calls / outside business hours",
+		tool: "queryCalls",
+		filter: { timeOfDay: "after_hours" },
+		note: "business_hours = Mon-Fri 8:00AM-5:00PM (the United Way deliverables definition); after_hours = everything else. Based on when the call report was entered; holidays count as business days.",
+	},
+	{
+		term: "unique callers / unduplicated callers / repeat callers / how many people called",
+		tool: "queryCalls",
+		filter: {},
+		note: "Use metric count_unique_callers (distinct people via a privacy-preserving phone-number key). Coverage: 2022 onward; ~99% of those calls have a key — 2021 calls and calls with no phone are excluded, so say so. For repeat-caller share, also run count_calls and compare.",
+	},
+	{
+		term: "children served / how many children / kids served",
+		tool: "queryCalls",
+		filter: {},
+		note: "Use metric total_children_under_5 — the sum of children age 0-5 reported per call. The data records ONLY children 0-5 (no all-ages count exists) and only from Oct-2025 onward. Always state both limits.",
+	},
+	{
 		term: "ECM referrals / ECM",
 		tool: "queryServiceNeeds",
 		filter: { agencyContains: "ECM Support Services" },

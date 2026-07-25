@@ -38,6 +38,28 @@ export type PromptJson = {
 	userMessage: string;
 };
 
+export type ReferralJson = {
+	crisisDetected?: boolean;
+	/**
+	 * Whether the visitor shared their device location this turn.
+	 *
+	 * A boolean ON PURPOSE — the coordinates themselves are never persisted. This
+	 * table is retained indefinitely and the widget serves people in crisis,
+	 * including domestic-violence callers, for whom a stored precise location is a
+	 * safety risk rather than merely a privacy one. This is enough to answer "is
+	 * the feature being used?" without holding anything dangerous.
+	 */
+	usedSharedLocation?: boolean;
+	toolCalls?: {
+		tool: string;
+		input: unknown;
+		resultCount: number;
+		/** directory_programs row ids shown to the user (the rendered cards) */
+		programIds?: string[];
+		error?: string;
+	}[];
+};
+
 export const chatTurns = pgTable(
 	"chat_turns",
 	{
@@ -64,6 +86,10 @@ export const chatTurns = pgTable(
 		prompt: jsonb("prompt").$type<PromptJson>().notNull(),
 
 		response: text("response").notNull(),
+
+		// Resource-referral telemetry (tool calls, crisis flag; later: card
+		// click beacons). Null for turns on widgets without resource search.
+		referral: jsonb("referral").$type<ReferralJson | null>(),
 	},
 	(t) => [
 		index("chat_turns_domain_idx").on(t.domain),

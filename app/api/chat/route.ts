@@ -2,14 +2,33 @@ import { findRelevantContentForDomain, findRelevantContentForDomains } from "@/l
 import { getWidget } from "@/lib/actions/widgetConfigs";
 import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
+import { checkInputShape } from "@/lib/ai/inputShape";
+import { env } from "@/lib/env.mjs";
+import { checkBotId } from "botid/server";
+import { CRISIS_TURN_CONTEXT, detectCrisis } from "@/lib/directory/crisis";
+import { REFERRAL_PROMPT_SECTION } from "@/lib/directory/prompt";
+import {
+	createDirectoryTools,
+	type DirectoryToolLog,
+	type UserLocation,
+} from "@/lib/directory/tools";
+import { isValidCoords } from "@/lib/directory/geo";
 import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
-import { convertToModelMessages, generateText, Output, streamText, type UIMessage } from "ai";
+import {
+	convertToModelMessages,
+	generateText,
+	Output,
+	stepCountIs,
+	streamText,
+	type UIMessage,
+} from "ai";
 import { z } from "zod";
 import type { ChatSource } from "@/lib/types/chat";
 
-// gpt-5 streams the final answer slower than 4o-mini, so allow more room.
-export const maxDuration = 60;
+// gpt-5 streams the final answer slower than 4o-mini, and resource-enabled
+// widgets may take several tool steps before composing.
+export const maxDuration = 120;
 
 // Cheap model for internal retrieval-query generation.
 const queryModel = "openai/gpt-4o-mini";
@@ -19,6 +38,34 @@ const composerModel = "openai/gpt-5";
 const TOP_K = 8;
 
 const ALLOWED_ORIGINS = new Set(["https://www.unitedwaymerced.org", "https://www.211merced.org"]);
+
+// Small JSON error helper for the early abuse-protection returns below.
+function jsonError(status: number, message: string): Response {
+	return new Response(JSON.stringify({ error: message }), {
+		status,
+		headers: { "content-type": "application/json" },
+	});
+}
+
+// The widget runs in an iframe served by THIS app (public/widget.js points the
+// iframe at `${origin}/widget/<id>`), so a legitimate chat POST always carries this
+// app's own Origin — or one of the embedding sites in ALLOWED_ORIGINS, which are
+// also permitted to call the endpoint cross-origin via CORS. A present but foreign
+// Origin is a cross-site caller and is rejected. Absent Origins (non-browser
+// callers) are left to the rate limit and per-widget token.
+function originAllowed(req: Request): boolean {
+	const origin = req.headers.get("origin");
+	if (!origin) return true;
+	if (ALLOWED_ORIGINS.has(origin)) return true;
+	const allowed = new Set<string>();
+	try {
+		allowed.add(new URL(req.url).origin);
+	} catch {}
+	try {
+		allowed.add(new URL(env.APP_URL).origin);
+	} catch {}
+	return allowed.has(origin);
+}
 
 function getCorsHeaders(req: Request): Record<string, string> {
 	const origin = req.headers.get("origin") ?? "";
@@ -90,11 +137,47 @@ const MAX_MESSAGE_LENGTH = 2000;
 
 export async function POST(req: Request) {
 	const startTotal = performance.now();
-	const { messages, widgetId }: { messages: UIMessage[]; widgetId?: string } = await req.json();
+
+	// NOTE: per-IP rate limiting for this endpoint lives in the Vercel WAF
+	// ("Chat API Rate Limiting": path = /api/chat, 30 requests / 60s per IP -> 429),
+	// not in this file. That rule blocks at the edge, so an abusive client never
+	// reaches this function and costs no compute or model spend — strictly better
+	// than checking here, where the function has already started.
+	//
+	// An earlier version called checkRateLimit() from @vercel/firewall. That SDK
+	// exists for rate limits that need application context (upstream uses it to
+	// exempt authenticated internal traffic). Every turn here is public and
+	// anonymous, so there is no condition to express and the call was a redundant
+	// network round-trip on every request.
+	if (!originAllowed(req)) {
+		return jsonError(403, "Forbidden");
+	}
+
+	const {
+		messages,
+		widgetId,
+		widgetToken,
+		userLocation: rawUserLocation,
+	}: {
+		messages: UIMessage[];
+		widgetId?: string;
+		widgetToken?: string;
+		// Sent only after the visitor grants the browser permission prompt.
+		userLocation?: { latitude?: number; longitude?: number };
+	} = await req.json();
 
 	if (!Array.isArray(messages) || messages.length === 0) {
 		return new Response("Invalid messages", { status: 400 });
 	}
+
+	// Bot protection for the public widget: reject automated/scripted clients before any
+	// work. The widget carries the BotID proof (from initBotId in instrumentation-client).
+	// Fail open on any BotID error so an outage can't take down chat; local dev bypasses
+	// to HUMAN.
+	const isBot = await checkBotId()
+		.then((v) => v.isBot)
+		.catch(() => false);
+	if (isBot) return jsonError(403, "Forbidden");
 
 	const trimmedMessages = messages.slice(-MAX_MESSAGES);
 
@@ -103,21 +186,42 @@ export async function POST(req: Request) {
 		return new Response("Message too long", { status: 400 });
 	}
 
+	// Structural prefilter: empty, over-length, link-spam, or repetitive junk is
+	// rejected with no network call at all, so a garbage turn spends nothing.
+	const inputIssue = checkInputShape(lastUserText);
+	if (inputIssue) {
+		return jsonError(400, "Sorry, I can't process that message. Please rephrase your question.");
+	}
+
 	let domain: string;
 	let widgetDomains: string[] | null = null;
+	let resourceSearchEnabled = false;
 
 	if (widgetId) {
 		const widget = await getWidget(widgetId);
 		if (!widget || !widget.enabled) {
 			return new Response("Widget not found or disabled", { status: 404 });
 		}
+		// Per-widget token rendered by the widget page and echoed back here, so a
+		// leaked or guessed widget id alone can't drive the bot. Not a secret (it
+		// ships to the browser) — it's a revocable handle: rotate the row to cut off
+		// an abused embed instead of taking the endpoint down.
+		if (widgetToken !== widget.widgetToken) {
+			return jsonError(403, "Forbidden");
+		}
 		widgetDomains = widget.domains;
 		domain = `widget:${widgetId}`;
+		resourceSearchEnabled = widget.enableResourceSearch;
 	} else {
 		domain = getDomainFromRequest(req) ?? "unknown";
 	}
 
 	const userText = lastUserText;
+
+	// Deterministic crisis screen (resource-enabled widgets only): a hit tells
+	// the client to render the static crisis card immediately, and the model
+	// gets crisis context injected — it still answers (see lib/directory/crisis).
+	const crisisDetected = resourceSearchEnabled && detectCrisis(userText);
 
 	const modelMessages = await convertToModelMessages(trimmedMessages);
 
@@ -201,18 +305,34 @@ Formatting (your reply is rendered as markdown):
 - Use a bullet list ("- ") ONLY when presenting 3 or more distinct items, resources, or steps. Never put normal explanatory sentences or a single item in a list.
 - Use **bold** sparingly for a key name, phone number, or label. Use headings ("### ") only for a long, multi-section answer.
 - When you reference a page, link to it ONCE as a clean descriptive markdown link, e.g. [Over the Edge details](https://example.org/overtheedge). Never paste raw URLs, and never include the literal "[Source: …]" labels from the Context in your reply — those are internal.
-
+${resourceSearchEnabled ? REFERRAL_PROMPT_SECTION : ""}${crisisDetected ? `\n${CRISIS_TURN_CONTEXT}\n` : ""}
 Context:
 ${context || "(empty)"}
 `;
 
 	const turnId = nanoid();
 	const startLlm = performance.now();
+	const toolLog: DirectoryToolLog[] = [];
+
+	// Validated here rather than trusted: a malformed or out-of-range pair is simply
+	// ignored, and search falls back to whatever city the conversation established.
+	const userLocation: UserLocation = isValidCoords(
+		rawUserLocation?.latitude,
+		rawUserLocation?.longitude,
+	)
+		? {
+				latitude: rawUserLocation?.latitude as number,
+				longitude: rawUserLocation?.longitude as number,
+			}
+		: null;
 
 	const result = streamText({
 		model: composerModel,
 		messages: modelMessages,
 		system: systemPrompt,
+		...(resourceSearchEnabled
+			? { tools: createDirectoryTools(toolLog, userLocation), stopWhen: stepCountIs(5) }
+			: {}),
 		onFinish: async ({ text }) => {
 			const endTotal = performance.now();
 
@@ -250,6 +370,13 @@ ${context || "(empty)"}
 					userMessage: userText,
 				},
 				response: text,
+				// PRIVACY: record only THAT a location was shared, never the coordinates.
+				// chat_turns is retained indefinitely and this widget serves people in
+				// crisis — including domestic-violence callers, for whom a stored
+				// precise location is a safety risk, not just a privacy one.
+				referral: resourceSearchEnabled
+					? { crisisDetected, toolCalls: toolLog, usedSharedLocation: userLocation !== null }
+					: null,
 			};
 
 			await addTurn(turn);
@@ -258,7 +385,7 @@ ${context || "(empty)"}
 
 	return result.toUIMessageStreamResponse({
 		messageMetadata: ({ part }) => {
-			if (part.type === "start") return { turnId, sources };
+			if (part.type === "start") return { turnId, sources, crisis: crisisDetected || undefined };
 		},
 	});
 }

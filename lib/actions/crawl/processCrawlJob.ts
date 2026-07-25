@@ -14,6 +14,7 @@ import { generateCrawlSettingSnapshot, verbose } from "./utils";
 import { processPage } from "./handlers/handler";
 import { extractSchoolDirectory } from "./handlers/html";
 import { renderHtml } from "./render";
+import { fetchWithRetry } from "./fetchWithRetry";
 import { upsertResource } from "../resources";
 import { log } from "../logger";
 
@@ -143,7 +144,7 @@ export async function processCrawlJob(crawlJobId: string) {
 	}
 
 	try {
-		let response = await fetch(key, { cache: "no-store" });
+		let response = await fetchWithRetry(key, { cache: "no-store" });
 		if (verbose) console.log(`Crawling ${key} (depth: ${depth}) - ${response.status}`);
 		if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

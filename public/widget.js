@@ -156,6 +156,11 @@
     var iframe = document.createElement("iframe");
     iframe.src = iframeUrl;
     iframe.setAttribute("title", title + " chat");
+    // Permissions Policy: geolocation is denied inside a cross-origin iframe unless
+    // the embedding page delegates it here. Without this the "Use my location"
+    // button fails silently — the browser never even shows its permission prompt.
+    // Delegation is not consent: the visitor still has to grant the prompt.
+    iframe.setAttribute("allow", "geolocation");
     Object.assign(iframe.style, {
       width: "100%",
       // flex-basis 0 + min-height 0: the iframe takes its height purely from

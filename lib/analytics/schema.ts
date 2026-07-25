@@ -46,6 +46,12 @@ export const filtersSchema = z.object({
 	dateRange: dateRangeSchema,
 
 	// Caller / call
+	timeOfDay: z
+		.enum(["business_hours", "after_hours"])
+		.describe(
+			"business_hours = Mon-Fri 8:00AM-4:59PM (when the call was entered); after_hours = evenings + weekends.",
+		)
+		.optional(),
 	county: z.string().describe("Matches county (contains).").optional(),
 	city: z.string().describe("Matches city (contains).").optional(),
 	postalCode: z.string().optional(),
@@ -74,12 +80,25 @@ export type Filters = z.infer<typeof filtersSchema>;
 
 export const orderBySchema = z.enum(["metric_desc", "metric_asc", "group_asc"]).optional();
 
-export const callMetricSchema = z.enum(["count_calls", "avg_age", "min_age", "max_age"]);
+export const callMetricSchema = z.enum([
+	"count_calls",
+	// Distinct callers by pseudonymous phone-hash key (2022 onward; ~99% of calls
+	// have a key). Compare with count_calls to quantify repeat callers.
+	"count_unique_callers",
+	"avg_age",
+	"min_age",
+	"max_age",
+	// Sums of the per-call household counts (recorded Oct-2025 onward only).
+	"total_children_under_5",
+	"total_seniors_60_plus",
+]);
 export const callGroupBySchema = z.enum([
 	"day",
 	"week",
 	"month",
 	"year",
+	"hour",
+	"day_of_week",
 	"language",
 	"gender",
 	"ethnicity",

@@ -11,13 +11,14 @@ import { log } from "../logger";
 
 import { CRAWL_ALL_PAGES_CAP, DEFAULT_CRAWL_OPTIONS } from "../crawlDefaults";
 import { getCrawlSettings } from "./crawlSettings";
+import { fetchWithRetry } from "./fetchWithRetry";
 
 import type { CrawlSetup, RobotsRules } from "@/lib/types/crawl";
 import type { FlowControl } from "@upstash/qstash";
 
 const fetchRobots = async (origin: string): Promise<RobotsRules> => {
 	try {
-		const response = await fetch(`${origin}/robots.txt`, { cache: "no-store" });
+		const response = await fetchWithRetry(`${origin}/robots.txt`, { cache: "no-store" });
 		if (!response.ok) return { allow: [], disallow: [], crawlDelay: 0 };
 
 		const text = await response.text();
@@ -77,7 +78,9 @@ const fetchRobots = async (origin: string): Promise<RobotsRules> => {
 // path; map them to absolute URLs. This is the authoritative page list when present.
 const fetchCatapultSitemap = async (origin: string): Promise<string[]> => {
 	try {
-		const response = await fetch(`${origin}/scripts/CCMSADAR-SiteMap.php`, { cache: "no-store" });
+		const response = await fetchWithRetry(`${origin}/scripts/CCMSADAR-SiteMap.php`, {
+			cache: "no-store",
+		});
 		if (!response.ok) return [];
 
 		const text = await response.text();
@@ -116,7 +119,7 @@ const fetchSitemap = async (origin: string): Promise<string[]> => {
 	}
 
 	try {
-		const response = await fetch(`${origin}/sitemap.xml`, {
+		const response = await fetchWithRetry(`${origin}/sitemap.xml`, {
 			cache: "no-store",
 		});
 		if (!response.ok) {
