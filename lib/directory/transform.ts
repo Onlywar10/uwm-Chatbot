@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { htmlToMarkdown, markdownToPlain } from "./html";
+import { isDialable } from "./phone";
 import type {
 	DirectoryAddress,
 	DirectoryHours,
@@ -124,6 +126,11 @@ export function extractPublicPhones(
 		if (c?.type !== "PhoneNumber") continue;
 		const number = (c.number || "").trim();
 		if (!number) continue;
+		// iCarol PhoneNumber contacts are free text and authors put URLs and email
+		// addresses in them, which rendered as "Call https://www.facebook.com/…"
+		// with a tel: href built from digits scraped out of the URL. Short codes
+		// (911, 711, 898211) must survive, so this checks shape, not length.
+		if (!isDialable(number)) continue;
 		const label = normalizePhoneLabel(c.label || c.purpose);
 		if (label === "Fax" || label === "TTY") continue;
 		const key = number.replace(/\D/g, "");
@@ -225,9 +232,9 @@ export function buildTopicText(params: {
 	taxonomy: string[];
 	description: string | null;
 }): string {
-	const firstSentences = params.description
-		? params.description.replace(/\s+/g, " ").trim().slice(0, 220)
-		: null;
+	// Strip Markdown before embedding: link URLs and bullet markers are noise in a
+	// vector, and a URL in the topic text actively hurts discrimination.
+	const firstSentences = markdownToPlain(params.description)?.slice(0, 220) ?? null;
 	return [
 		params.programName,
 		params.taxonomy.length ? params.taxonomy.join(", ") : null,
@@ -320,11 +327,14 @@ export function programToRows(
 		taxonomyNames,
 		serviceAreas: areas,
 		coverageDisplay: coverage,
-		eligibility: program.eligibility?.trim() || null,
-		languages: program.languagesOffered?.trim() || null,
-		fees: program.fees?.trim() || null,
-		applicationProcess: program.applicationProcess?.trim() || null,
-		requiredDocumentation: program.requiredDocumentation?.trim() || null,
+		// iCarol free text is author-entered HTML in these fields (links to
+		// application forms, bulleted document lists). Convert to Markdown so the
+		// cards can render the structure instead of leaking tags — see ./html.
+		eligibility: htmlToMarkdown(program.eligibility),
+		languages: htmlToMarkdown(program.languagesOffered),
+		fees: htmlToMarkdown(program.fees),
+		applicationProcess: htmlToMarkdown(program.applicationProcess),
+		requiredDocumentation: htmlToMarkdown(program.requiredDocumentation),
 		website: extractWebsite(program.contactDetails),
 		lastVerifiedOn: parseVerifiedOn(program.lastVerifiedOn),
 	};
