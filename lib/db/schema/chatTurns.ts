@@ -40,6 +40,16 @@ export type PromptJson = {
 
 export type ReferralJson = {
 	crisisDetected?: boolean;
+	/**
+	 * Whether the visitor shared their device location this turn.
+	 *
+	 * A boolean ON PURPOSE — the coordinates themselves are never persisted. This
+	 * table is retained indefinitely and the widget serves people in crisis,
+	 * including domestic-violence callers, for whom a stored precise location is a
+	 * safety risk rather than merely a privacy one. This is enough to answer "is
+	 * the feature being used?" without holding anything dangerous.
+	 */
+	usedSharedLocation?: boolean;
 	toolCalls?: {
 		tool: string;
 		input: unknown;

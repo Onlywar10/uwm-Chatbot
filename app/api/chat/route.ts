@@ -8,7 +8,12 @@ import { checkRateLimit } from "@vercel/firewall";
 import { checkBotId } from "botid/server";
 import { CRISIS_TURN_CONTEXT, detectCrisis } from "@/lib/directory/crisis";
 import { REFERRAL_PROMPT_SECTION } from "@/lib/directory/prompt";
-import { createDirectoryTools, type DirectoryToolLog } from "@/lib/directory/tools";
+import {
+	createDirectoryTools,
+	type DirectoryToolLog,
+	type UserLocation,
+} from "@/lib/directory/tools";
+import { isValidCoords } from "@/lib/directory/geo";
 import type { DevTurn } from "@/lib/types/dev";
 import { nanoid } from "@/lib/utils";
 import {
@@ -152,7 +157,14 @@ export async function POST(req: Request) {
 		messages,
 		widgetId,
 		widgetToken,
-	}: { messages: UIMessage[]; widgetId?: string; widgetToken?: string } = await req.json();
+		userLocation: rawUserLocation,
+	}: {
+		messages: UIMessage[];
+		widgetId?: string;
+		widgetToken?: string;
+		// Sent only after the visitor grants the browser permission prompt.
+		userLocation?: { latitude?: number; longitude?: number };
+	} = await req.json();
 
 	if (!Array.isArray(messages) || messages.length === 0) {
 		return new Response("Invalid messages", { status: 400 });
@@ -302,12 +314,24 @@ ${context || "(empty)"}
 	const startLlm = performance.now();
 	const toolLog: DirectoryToolLog[] = [];
 
+	// Validated here rather than trusted: a malformed or out-of-range pair is simply
+	// ignored, and search falls back to whatever city the conversation established.
+	const userLocation: UserLocation = isValidCoords(
+		rawUserLocation?.latitude,
+		rawUserLocation?.longitude,
+	)
+		? {
+				latitude: rawUserLocation?.latitude as number,
+				longitude: rawUserLocation?.longitude as number,
+			}
+		: null;
+
 	const result = streamText({
 		model: composerModel,
 		messages: modelMessages,
 		system: systemPrompt,
 		...(resourceSearchEnabled
-			? { tools: createDirectoryTools(toolLog), stopWhen: stepCountIs(5) }
+			? { tools: createDirectoryTools(toolLog, userLocation), stopWhen: stepCountIs(5) }
 			: {}),
 		onFinish: async ({ text }) => {
 			const endTotal = performance.now();
@@ -346,7 +370,13 @@ ${context || "(empty)"}
 					userMessage: userText,
 				},
 				response: text,
-				referral: resourceSearchEnabled ? { crisisDetected, toolCalls: toolLog } : null,
+				// PRIVACY: record only THAT a location was shared, never the coordinates.
+				// chat_turns is retained indefinitely and this widget serves people in
+				// crisis — including domestic-violence callers, for whom a stored
+				// precise location is a safety risk, not just a privacy one.
+				referral: resourceSearchEnabled
+					? { crisisDetected, toolCalls: toolLog, usedSharedLocation: userLocation !== null }
+					: null,
 			};
 
 			await addTurn(turn);

@@ -6,9 +6,10 @@ import {
 	type DirectoryPhone,
 	directoryPrograms,
 } from "@/lib/db/schema/directoryPrograms";
-import { and, arrayOverlaps, cosineDistance, desc, eq, gt, sql } from "drizzle-orm";
+import { and, arrayOverlaps, cosineDistance, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { embedNeed } from "./embedding";
-import { isRegionalCity, resolveUserLocation } from "./region";
+import { type Coords, distanceMiles as haversineMiles, isValidCoords } from "./geo";
+import { countyOfCity, isRegionalCity, resolveUserLocation } from "./region";
 
 /*
  * Retrieval tuning.
@@ -71,6 +72,21 @@ const PENALTY_STATEWIDE = -0.15;
 // what let a Los Angeles program take the top card for "diapers for a newborn".
 const PENALTY_REMOTE = -0.35;
 
+/*
+ * Proximity tiers, used INSTEAD of the locality tiers when the visitor shared
+ * their location and the row has coordinates.
+ *
+ * This is the point of the feature: city membership says a pantry across Merced
+ * and a pantry two miles away in Atwater are equally "in your county", when for
+ * someone without a car they are not remotely equivalent. Sized to sit in the same
+ * range as the locality tiers they replace, so relevance still leads.
+ */
+// Boost at zero distance, halving every MILES_HALF_WEIGHT miles. Sized so a
+// program at the visitor's doorstep edges out the old in-city bonus (0.15) while a
+// 25-mile one lands near the county bonus (0.06).
+const BOOST_NEAREST = 0.22;
+const MILES_HALF_WEIGHT = 6;
+
 // Cards shown per page. Capped in the tool rather than the prompt so display stays
 // deterministic (locked design decision).
 const PAGE_SIZE = 3;
@@ -80,6 +96,13 @@ export type DirectorySearchParams = {
 	city?: string;
 	zip?: string;
 	county?: string;
+	/**
+	 * Visitor's coordinates, when they chose to share them. Server-supplied only —
+	 * never a model-provided tool argument, so the model cannot invent a location.
+	 * When present these drive ranking instead of the coarse city/county tiers.
+	 */
+	latitude?: number | null;
+	longitude?: number | null;
 	/** Optional exact-vocabulary nudge, matched against AIRS taxonomy names. */
 	taxonomyContains?: string;
 	/** Paging for "show more" — 0-based offset into the ranked program list. */
@@ -103,11 +126,17 @@ export type DirectoryMatch = {
 	website: string | null;
 	address: DirectoryAddress | null;
 	addressIsPrivate: boolean;
+	/** Coordinates when iCarol has them (1,205 of 1,278 rows) — more reliable than
+	 *  making a maps provider geocode a free-text address. */
+	latitude: number | null;
+	longitude: number | null;
 	lastVerifiedOn: string | null;
 	/** Other locations of the same program that also matched the search. */
 	otherLocations: number;
 	/** How this match relates to the user's location — drives card labelling. */
 	locality: "in_city" | "covers_city" | "in_county" | "statewide" | "remote" | "unknown";
+	/** Straight-line miles from the visitor, when they shared their location. */
+	distanceMiles: number | null;
 };
 
 export type DirectorySearchResult = {
@@ -148,6 +177,8 @@ const candidateColumns = {
 	website: directoryPrograms.website,
 	address: directoryPrograms.address,
 	addressIsPrivate: directoryPrograms.addressIsPrivate,
+	latitude: directoryPrograms.latitude,
+	longitude: directoryPrograms.longitude,
 	lastVerifiedOn: directoryPrograms.lastVerifiedOn,
 	city: directoryPrograms.city,
 	serviceAreas: directoryPrograms.serviceAreas,
@@ -162,6 +193,7 @@ type Candidate = {
 	siblings: number;
 	score: number;
 	locality: DirectoryMatch["locality"];
+	distanceMiles: number | null;
 };
 
 function localityOf(
@@ -179,6 +211,77 @@ function localityOf(
 	// No address and no local tie — it matched on statewide coverage alone.
 	if (row.serviceAreas.some((t) => t.startsWith("state:"))) return "statewide";
 	return "unknown";
+}
+
+/**
+ * Continuous decay rather than distance bands.
+ *
+ * Bands were the first attempt and they flattened exactly what this feature is
+ * for: two programs 1 and 9 miles away both landed in the "under 10" bucket and
+ * scored identically, so the closer one never won. A smooth curve keeps every
+ * comparison meaningful while still flattening out at long range, where the
+ * difference between 30 and 40 miles matters little to someone without a car.
+ */
+function proximityAdjustment(miles: number): number {
+	return BOOST_NEAREST / (1 + Math.max(0, miles) / MILES_HALF_WEIGHT);
+}
+
+/**
+ * Nearest place we have a name for, derived from the directory's own geocoded
+ * rows rather than a hardcoded gazetteer or an external reverse-geocoding call.
+ *
+ * Coordinates alone can't tell us whether a program *serves* the visitor —
+ * proximity is not eligibility, and a pantry two miles away may only take
+ * residents of its own city. So we still need a city/county to drive the
+ * service-area prefilter; this supplies it without inventing coordinates.
+ */
+type CityCentroid = { city: string; latitude: number; longitude: number };
+let centroidCache: Promise<CityCentroid[]> | null = null;
+
+/**
+ * Average position of each city's programs, used to name the place a visitor is
+ * standing in. Cached per process; the directory only changes on the nightly sync.
+ */
+function cityCentroids(): Promise<CityCentroid[]> {
+	if (!centroidCache) {
+		centroidCache = db
+			.execute(
+				sql`select city,
+				      avg(latitude)::float  as latitude,
+				      avg(longitude)::float as longitude
+				    from directory_programs
+				    where city is not null and latitude is not null and longitude is not null
+				    group by city`,
+			)
+			.then((r) => r.rows as CityCentroid[])
+			.catch((err) => {
+				centroidCache = null; // don't cache a failure
+				throw err;
+			});
+	}
+	return centroidCache;
+}
+
+async function nearestKnownPlace(
+	coords: Coords,
+): Promise<{ city: string | null; county: string | null }> {
+	const centroids = await cityCentroids();
+	let best: CityCentroid | null = null;
+	let bestMiles = Number.POSITIVE_INFINITY;
+	for (const c of centroids) {
+		if (!isValidCoords(c.latitude, c.longitude)) continue;
+		const miles = haversineMiles(coords, { latitude: c.latitude, longitude: c.longitude });
+		if (miles < bestMiles) {
+			bestMiles = miles;
+			best = c;
+		}
+	}
+	if (!best) return { city: null, county: null };
+
+	// County comes from the region map, which knows the two-county geography and
+	// tolerates spelling variants; the directory's own county column is null on
+	// some rows and would otherwise drop the county token.
+	return { city: best.city, county: countyOfCity(best.city) };
 }
 
 function localityAdjustment(locality: DirectoryMatch["locality"]): number {
@@ -240,9 +343,12 @@ function toMatch(candidate: Candidate): DirectoryMatch {
 		website: r.website,
 		address: r.address ?? null,
 		addressIsPrivate: r.addressIsPrivate,
+		latitude: r.latitude ?? null,
+		longitude: r.longitude ?? null,
 		lastVerifiedOn: r.lastVerifiedOn ? r.lastVerifiedOn.toISOString().slice(0, 10) : null,
 		otherLocations: Math.max(0, candidate.siblings - 1),
 		locality: candidate.locality,
+		distanceMiles: candidate.distanceMiles,
 	};
 }
 
@@ -259,8 +365,24 @@ function toMatch(candidate: Candidate): DirectoryMatch {
 export async function searchDirectory(
 	params: DirectorySearchParams,
 ): Promise<DirectorySearchResult> {
-	const location = resolveUserLocation(params);
 	const offset = Math.max(0, params.offset ?? 0);
+
+	// Shared coordinates take precedence over a typed city: they are strictly more
+	// precise, and someone who granted location permission has already told us where
+	// they are. The nearest named place still drives the coverage prefilter, because
+	// being close to a program does not mean being eligible for it.
+	const userCoords: Coords | null = isValidCoords(params.latitude, params.longitude)
+		? { latitude: params.latitude as number, longitude: params.longitude as number }
+		: null;
+
+	let location = resolveUserLocation(params);
+	if (userCoords) {
+		const place = await nearestKnownPlace(userCoords);
+		location = resolveUserLocation({
+			city: place.city ?? undefined,
+			county: place.county ?? undefined,
+		});
+	}
 
 	const needVector = await embedNeed(params.need);
 	// Rank on the narrow topic embedding (name + services + one sentence). Against the
@@ -325,6 +447,7 @@ export async function searchDirectory(
 			siblings: Number(siblings),
 			score: 0,
 			locality: localityOf(row as Candidate["row"], location.city, location.county),
+			distanceMiles: null,
 		};
 	});
 
@@ -342,10 +465,21 @@ export async function searchDirectory(
 	const bm25Weight = isShort ? BM25_WEIGHT_SHORT : BM25_WEIGHT_LONG;
 
 	for (const c of candidates) {
-		c.score =
-			normalize(c.similarity) +
-			bm25Weight * (bm25.get(c.row.id) ?? 0) +
-			localityAdjustment(c.locality);
+		// Real distance when we have both ends of it; otherwise fall back to the
+		// coarse locality tier. A row without coordinates keeps its city/county
+		// bonus rather than being penalised for missing data.
+		if (userCoords && isValidCoords(c.row.latitude, c.row.longitude)) {
+			c.distanceMiles = haversineMiles(userCoords, {
+				latitude: c.row.latitude as number,
+				longitude: c.row.longitude as number,
+			});
+		}
+		const placeAdjustment =
+			c.distanceMiles !== null
+				? proximityAdjustment(c.distanceMiles)
+				: localityAdjustment(c.locality);
+
+		c.score = normalize(c.similarity) + bm25Weight * (bm25.get(c.row.id) ?? 0) + placeAdjustment;
 	}
 	candidates.sort((a, b) => b.score - a.score);
 

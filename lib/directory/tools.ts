@@ -60,7 +60,15 @@ const getResourceDetailsInputSchema = z.object({
  * Registered only for widgets with resource search enabled. A log array is
  * passed in so the route can record calls + displayed programs (telemetry).
  */
-export function createDirectoryTools(log: DirectoryToolLog[]) {
+/**
+ * Coordinates the visitor chose to share, resolved server-side from the request.
+ * Deliberately NOT a tool input: the model must not be able to invent or alter a
+ * location, and a shared location is a fact about the request rather than
+ * something to reason about.
+ */
+export type UserLocation = { latitude: number; longitude: number } | null;
+
+export function createDirectoryTools(log: DirectoryToolLog[], userLocation: UserLocation = null) {
 	return {
 		searchResources: tool({
 			description:
@@ -70,11 +78,20 @@ export function createDirectoryTools(log: DirectoryToolLog[]) {
 				"numbers, addresses, or hours in your reply. Also returns totalMatches/moreCount (offer to " +
 				"narrow or show more), citiesRepresented (ask which city only when this shows results span " +
 				"cities), noGoodMatch (be honest and point to dialing 2-1-1), and locationNote (relay it). " +
-				"Gather the person's city or zip before calling; results are region-wide without it.",
+				"Gather the person's city or zip before calling; results are region-wide without it. " +
+				"If the person has shared their device location, the system supplies it automatically and " +
+				"results are already sorted by real distance — do not ask for a city in that case.",
 			inputSchema: searchResourcesInputSchema,
 			execute: async (input) => {
 				try {
-					const result = await searchDirectory(input);
+					const result = await searchDirectory({
+						...input,
+						// Shared coordinates win over anything the model inferred: they are
+						// precise, and they let a program in the next town outrank a farther
+						// one in the visitor's own city.
+						latitude: userLocation?.latitude ?? null,
+						longitude: userLocation?.longitude ?? null,
+					});
 					log.push({
 						tool: "searchResources",
 						input,
