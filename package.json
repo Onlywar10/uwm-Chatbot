@@ -38,7 +38,6 @@
 		"@t3-oss/env-nextjs": "^0.13.10",
 		"@truto/turndown-plugin-gfm": "^1.0.2",
 		"@upstash/qstash": "^2.9.0",
-		"@vercel/firewall": "^1.2.1",
 		"ai": "^6.0.33",
 		"botid": "^1.5.11",
 		"class-variance-authority": "^0.7.1",

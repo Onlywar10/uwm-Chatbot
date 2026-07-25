@@ -4,7 +4,6 @@ import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
 import { checkInputShape } from "@/lib/ai/inputShape";
 import { env } from "@/lib/env.mjs";
-import { checkRateLimit } from "@vercel/firewall";
 import { checkBotId } from "botid/server";
 import { CRISIS_TURN_CONTEXT, detectCrisis } from "@/lib/directory/crisis";
 import { REFERRAL_PROMPT_SECTION } from "@/lib/directory/prompt";
@@ -139,16 +138,17 @@ const MAX_MESSAGE_LENGTH = 2000;
 export async function POST(req: Request) {
 	const startTotal = performance.now();
 
-	// Abuse protection for this public, unauthenticated endpoint. A per-IP rate limit
-	// (Vercel WAF rule "chat-turn") gates volume before any paid LLM/embedding work; the
-	// SDK no-ops until that rule is configured, so it never blocks local development.
-	// Fail open on any SDK/config error so a limiter outage can't take down chat.
-	const rateLimited = await checkRateLimit("chat-turn", { request: req })
-		.then((r) => r.rateLimited)
-		.catch(() => false);
-	if (rateLimited) {
-		return jsonError(429, "Too many requests. Please slow down and try again shortly.");
-	}
+	// NOTE: per-IP rate limiting for this endpoint lives in the Vercel WAF
+	// ("Chat API Rate Limiting": path = /api/chat, 30 requests / 60s per IP -> 429),
+	// not in this file. That rule blocks at the edge, so an abusive client never
+	// reaches this function and costs no compute or model spend — strictly better
+	// than checking here, where the function has already started.
+	//
+	// An earlier version called checkRateLimit() from @vercel/firewall. That SDK
+	// exists for rate limits that need application context (upstream uses it to
+	// exempt authenticated internal traffic). Every turn here is public and
+	// anonymous, so there is no condition to express and the call was a redundant
+	// network round-trip on every request.
 	if (!originAllowed(req)) {
 		return jsonError(403, "Forbidden");
 	}
