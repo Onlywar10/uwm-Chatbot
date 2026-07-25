@@ -22,6 +22,7 @@ export default async function WidgetPage({ params }: { params: Promise<{ id: str
 				// Echoed back on every chat POST so a guessed widget id alone can't
 				// drive the bot. Public by design — see widget_configs.widget_token.
 				widgetToken: widget.widgetToken,
+				enableResourceSearch: widget.enableResourceSearch,
 			}}
 		/>
 	);
