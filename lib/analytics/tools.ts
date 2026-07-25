@@ -29,18 +29,27 @@ export function createAnalyticsTools(log: ToolLog[]) {
 	return {
 		queryCalls: tool({
 			description:
-				"Query the 211 CALLS (caller-level) data. Metrics: count_calls (distinct callers), " +
-				"avg_age / min_age / max_age. Filter by caller demographics, geography, language, and " +
-				"household; you may also filter by need/referral attributes (needCategory, taxonomyContains, " +
-				"agencyContains, needUnmet) to count callers who had such a referral. groupBy time " +
-				"(day/week/month/year) or caller dimensions.",
+				"Query the 211 CALLS (caller-level) data. Metrics: count_calls (call reports), " +
+				"count_unique_callers (distinct people by phone-based identity; compare with count_calls " +
+				"for repeat-caller share), avg_age / min_age / max_age, total_children_under_5 (sum of " +
+				"children age 0-5 reported across calls; recorded Oct-2025 onward only), " +
+				"total_seniors_60_plus (sum of household seniors 60+; same window). Filter by caller " +
+				"demographics, geography, language, household, and timeOfDay (business_hours = Mon-Fri " +
+				"8AM-5PM, after_hours = evenings/weekends); you may also filter by need/referral " +
+				"attributes (needCategory, taxonomyContains, agencyContains, needUnmet) to count callers " +
+				"who had such a referral. groupBy time (day/week/month/year/hour/day_of_week) or caller " +
+				"dimensions.",
 			inputSchema: queryCallsInputSchema,
 			execute: async (input) => {
 				try {
 					const anchor = await getDataAnchor();
 					const range = resolveDateRange(input.filters?.dateRange, anchor);
 					const ctx = await getCoverageContext();
-					const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
+					const used = usedCoverageFields(
+						cleanFilters(input.filters ?? {}),
+						input.groupBy ?? [],
+						input.metric,
+					);
 
 					const result = await runCalls(input, range);
 					const denom = await runCalls(
@@ -94,7 +103,11 @@ export function createAnalyticsTools(log: ToolLog[]) {
 					const anchor = await getDataAnchor();
 					const range = resolveDateRange(input.filters?.dateRange, anchor);
 					const ctx = await getCoverageContext();
-					const used = usedCoverageFields(cleanFilters(input.filters ?? {}), input.groupBy ?? []);
+					const used = usedCoverageFields(
+						cleanFilters(input.filters ?? {}),
+						input.groupBy ?? [],
+						input.metric,
+					);
 
 					const result = await runServiceNeeds(input, range);
 					const denomMetric =

@@ -51,15 +51,20 @@ export const goldenCases: GoldenCase[] = [
 	{
 		name: "calls in a non-English language",
 		expected: (d) =>
-			d.calls.filter((c) => c.languageCanonical && c.languageCanonical !== "English").length,
+			d.calls.filter(
+				(c) =>
+					c.languageCanonical &&
+					c.languageCanonical !== "English" &&
+					c.languageCanonical !== "Unknown",
+			).length,
 		actual: () => scalarCalls({ metric: "count_calls", filters: { language: ["non_english"] } }),
 	},
 	{
-		name: "Black/African American callers (canonical merge)",
+		name: "Black African American callers (canonical merge)",
 		expected: (d) =>
-			d.calls.filter((c) => c.ethnicityCanonical === "Black/African American").length,
+			d.calls.filter((c) => c.ethnicityCanonical === "Black African American").length,
 		actual: () =>
-			scalarCalls({ metric: "count_calls", filters: { ethnicity: ["Black/African American"] } }),
+			scalarCalls({ metric: "count_calls", filters: { ethnicity: ["Black African American"] } }),
 	},
 	{
 		name: "Food/Meals needs (distinct)",

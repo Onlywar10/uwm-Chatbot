@@ -22,6 +22,8 @@ const FIELD_LABELS: Record<string, string> = {
 	age_numeric: "Caller age",
 	health_insurance: "Health insurance",
 	has_children_0_5: "Children under 5 in household",
+	children_under_5_count: "Number of children under 5",
+	caller_key: "Caller identity (phone-based)",
 	seniors_60_plus_count: "Seniors in household",
 	county: "County",
 	city: "City",
@@ -59,8 +61,12 @@ export async function getCoverageContext(): Promise<CoverageContext> {
 }
 
 /** DB column names for the fields a query touches (for coverage notes / availability). */
-export function usedCoverageFields(f: Filters, groupBy: string[]): string[] {
+export function usedCoverageFields(f: Filters, groupBy: string[], metric?: string): string[] {
 	const s = new Set<string>();
+	if (metric === "total_children_under_5") s.add("children_under_5_count");
+	if (metric === "total_seniors_60_plus") s.add("seniors_60_plus_count");
+	if (metric === "count_unique_callers") s.add("caller_key");
+	if (metric === "avg_age" || metric === "min_age" || metric === "max_age") s.add("age_numeric");
 	if (f.language?.length) s.add("language_canonical");
 	if (f.teleInterpretationUsed !== undefined) s.add("tele_interpretation_used");
 	if (f.gender?.length) s.add("gender_canonical");

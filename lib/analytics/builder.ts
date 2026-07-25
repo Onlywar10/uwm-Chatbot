@@ -29,6 +29,7 @@ export function cleanFilters(f: Filters): Filters {
 	const bool = (b?: boolean) => (b === true ? true : undefined);
 	return {
 		dateRange: f.dateRange,
+		timeOfDay: f.timeOfDay || undefined,
 		county: str(f.county),
 		city: str(f.city),
 		postalCode: str(f.postalCode),
@@ -53,10 +54,22 @@ export function cleanFilters(f: Filters): Filters {
 // Conditions
 // ---------------------------------------------------------------------------
 
+/**
+ * Business hours per the United Way deliverables definition: Mon–Fri, 8:00 AM
+ * to 5:00 PM (hour 8–16 covers 8:00:00–16:59:59). Timestamps are the naive
+ * local wall-clock time the call report was entered. No holiday awareness.
+ */
+const BUSINESS_HOURS = sql`(extract(dow from ${calls.enteredOn}) between 1 and 5 and extract(hour from ${calls.enteredOn}) between 8 and 16)`;
+
+function timeOfDayCondition(value: string): SQL {
+	return value === "business_hours" ? BUSINESS_HOURS : sql`not ${BUSINESS_HOURS}`;
+}
+
 function languageCondition(values: string[]): SQL | undefined {
 	const parts = values.map((v) =>
 		v === "non_english"
-			? sql`(${calls.languageCanonical} IS NOT NULL AND ${calls.languageCanonical} <> 'English')`
+			? // A specific non-English language; excludes 'Unknown' (caller declined).
+				sql`(${calls.languageCanonical} IS NOT NULL AND ${calls.languageCanonical} NOT IN ('English', 'Unknown'))`
 			: eq(calls.languageCanonical, v),
 	);
 	return parts.length ? or(...parts) : undefined;
@@ -64,6 +77,7 @@ function languageCondition(values: string[]): SQL | undefined {
 
 function callConditions(f: Filters): SQL[] {
 	return compact([
+		f.timeOfDay ? timeOfDayCondition(f.timeOfDay) : undefined,
 		f.county
 			? ilike(calls.county, `%${f.county.replace(/\s*count(y|ies)$/i, "").trim()}%`)
 			: undefined,
@@ -114,7 +128,8 @@ export function hasNeedOrReferralFilter(f: Filters): boolean {
 
 function hasCallFilter(f: Filters): boolean {
 	return Boolean(
-		f.county ||
+		f.timeOfDay ||
+			f.county ||
 			f.city ||
 			f.postalCode ||
 			f.language?.length ||
@@ -149,6 +164,12 @@ function callGroupExpr(key: string): SQL {
 			return timeExpr(sql`${calls.enteredOn}`, "month", "YYYY-MM");
 		case "year":
 			return timeExpr(sql`${calls.enteredOn}`, "year", "YYYY");
+		case "hour":
+			// "08" .. "23" — hour of day the call was entered
+			return sql`to_char(${calls.enteredOn}, 'HH24')`;
+		case "day_of_week":
+			// "1-Mon" .. "7-Sun" — ISO day number prefix keeps rows in week order
+			return sql`to_char(${calls.enteredOn}, 'ID-Dy')`;
 		case "language":
 			return sql`${calls.languageCanonical}`;
 		case "gender":
@@ -189,12 +210,20 @@ function needGroupExpr(key: string): SQL {
 
 function callMetricExpr(metric: string): SQL {
 	switch (metric) {
+		case "count_unique_callers":
+			// Distinct pseudonymous phone-hash keys; NULL keys (no phone / pre-2022
+			// rows) are excluded — fieldAvailability reports the key's coverage.
+			return sql`count(distinct ${calls.callerKey})`;
 		case "avg_age":
 			return sql`round(avg(${calls.ageNumeric})::numeric, 1)`;
 		case "min_age":
 			return sql`min(${calls.ageNumeric})`;
 		case "max_age":
 			return sql`max(${calls.ageNumeric})`;
+		case "total_children_under_5":
+			return sql`coalesce(sum(${calls.childrenUnder5Count}), 0)`;
+		case "total_seniors_60_plus":
+			return sql`coalesce(sum(${calls.seniors60PlusCount}), 0)`;
 		default:
 			return sql`count(*)`;
 	}

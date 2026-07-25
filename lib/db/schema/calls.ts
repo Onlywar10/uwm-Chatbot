@@ -43,9 +43,16 @@ export const calls = pgTable(
 		hasChildren0to5: boolean("has_children_0_5"),
 		childrenUnder5Count: integer("children_under_5_count"),
 		seniors60PlusCount: integer("seniors_60_plus_count"),
+
+		// Pseudonymous repeat-caller key: salted hash of the caller's normalized
+		// phone number, enriched from the RAW iCarol CallReports export (the
+		// curated CSVs are de-identified). Never store the raw number. NULL when
+		// the call had no usable phone or predates the raw export's window.
+		callerKey: varchar("caller_key", { length: 32 }),
 	},
 	(t) => [
 		index("calls_entered_on_idx").on(t.enteredOn),
+		index("calls_caller_key_idx").on(t.callerKey),
 		index("calls_county_idx").on(t.county),
 		index("calls_ethnicity_canonical_idx").on(t.ethnicityCanonical),
 		index("calls_gender_canonical_idx").on(t.genderCanonical),
