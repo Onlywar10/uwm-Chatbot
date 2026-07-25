@@ -75,6 +75,40 @@ const ZIP_TO_CITY: Record<string, string> = {
 	"95389": "yosemite national park",
 };
 
+/**
+ * Is this city inside the two-county service region?
+ *
+ * Used to distinguish a program that is physically here from one that merely
+ * *claims* county coverage from far away. The iCarol database is shared statewide,
+ * so a Los Angeles program can legitimately carry `county:merced` in its coverage
+ * and then take the top card for a local need — which is not useful to someone who
+ * needs diapers today.
+ */
+export function isRegionalCity(city: string | null | undefined): boolean {
+	return countyOfCity(city) !== null;
+}
+
+/**
+ * City -> county, tolerant of the spelling variants the directory actually
+ * contains. iCarol stores "Cathey's Valley" while this map keys "catheys valley",
+ * so a strict lookup marked a Mariposa cooling center as being outside its own
+ * county. Punctuation is stripped and whitespace collapsed before matching.
+ */
+export function countyOfCity(city: string | null | undefined): "merced" | "mariposa" | null {
+	if (!city) return null;
+	const normalize = (s: string) =>
+		s
+			.toLowerCase()
+			.replace(/[^\w\s]/g, "")
+			.replace(/\s+/g, " ")
+			.trim();
+	const key = normalize(city);
+	for (const [name, county] of Object.entries(CITY_TO_COUNTY)) {
+		if (normalize(name) === key) return county;
+	}
+	return null;
+}
+
 function cityTokensForCounty(county: "merced" | "mariposa"): string[] {
 	return Object.entries(CITY_TO_COUNTY)
 		.filter(([, c]) => c === county)

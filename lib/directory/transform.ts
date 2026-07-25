@@ -51,6 +51,29 @@ export function serviceAreaTokens(coverage: ICarolCoverageEntry[] | undefined): 
 	return [...tokens];
 }
 
+/**
+ * Coverage tokens for a row whose program has NO structured coverage[] in iCarol.
+ *
+ * Search prefilters with `arrayOverlaps(service_areas, ...)`, and an empty array
+ * overlaps nothing — so a row with no tokens is unreachable by every query, forever.
+ * That silently hid 8% of the directory, including every cooling center in both
+ * counties and The Trevor Project.
+ *
+ * A program with a physical address in a town almost certainly serves that town, so
+ * fall back to the row's own location. This is deliberately narrower than a coverage
+ * claim: we assert the city and its county, not a region.
+ */
+export function fallbackAreaTokens(
+	address: { city?: string; county?: string } | null | undefined,
+): string[] {
+	const tokens = new Set<string>();
+	const city = address?.city?.trim().toLowerCase();
+	const county = address?.county?.trim().toLowerCase();
+	if (city) tokens.add(`city:${city}`);
+	if (county) tokens.add(`county:${county}`);
+	return [...tokens];
+}
+
 /** Human-readable coverage summary for cards, e.g. "Serves Merced County". */
 export function coverageDisplay(coverage: ICarolCoverageEntry[] | undefined): string | null {
 	const entries = coverage ?? [];
@@ -305,6 +328,11 @@ export function programToRows(
 		});
 		return {
 			...base,
+			// iCarol left coverage[] empty for this program — derive reach from where
+			// the row actually is, or it can never be returned by any search.
+			serviceAreas: base.serviceAreas.length
+				? base.serviceAreas
+				: fallbackAreaTokens(located?.address),
 			siteId: site?.id ?? null,
 			siteName,
 			hours: toHours(site ?? undefined) ?? programHours,
