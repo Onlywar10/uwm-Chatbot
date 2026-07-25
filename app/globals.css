@@ -63,6 +63,53 @@
 	color: #1d4ed8;
 }
 
+/* Markdown inside a resource card's detail panel. Same structures as .chat-md
+   (iCarol authors enter bulleted document lists and links to application forms,
+   converted from HTML at sync time by lib/directory/html.ts) but tighter, since
+   this sits in a dense card rather than a chat bubble. Inline-first: most values
+   are a short phrase that should sit on the same line as its "Bring:" label. */
+.card-md > :first-child {
+	margin-top: 0;
+}
+.card-md > :last-child {
+	margin-bottom: 0;
+}
+.card-md p {
+	margin: 0.25em 0;
+	display: inline;
+}
+.card-md ul,
+.card-md ol {
+	margin: 0.3em 0;
+	padding-left: 1.1rem;
+	display: block;
+}
+.card-md ul {
+	list-style: disc outside;
+}
+.card-md ol {
+	list-style: decimal outside;
+}
+.card-md li {
+	margin: 0.1em 0;
+	display: list-item;
+}
+.card-md li > p {
+	margin: 0;
+	display: inline;
+}
+.card-md strong {
+	font-weight: 600;
+}
+.card-md a {
+	color: #2563eb;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	/* iCarol links are often raw tracking URLs; keep them from blowing out the
+	   card width on small screens. */
+	overflow-wrap: anywhere;
+}
+
 @theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);

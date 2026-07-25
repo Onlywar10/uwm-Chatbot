@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Streamdown } from "streamdown";
 import type { DirectoryHours } from "@/lib/db/schema/directoryPrograms";
 import type { DirectoryMatch, DirectorySearchResult } from "@/lib/directory/search";
+import { toTelHref } from "@/lib/directory/phone";
+import { formatDistance } from "@/lib/directory/geo";
+import {
+	currentMapsPlatform,
+	directionsUrl,
+	type DirectionsTarget,
+	type MapsPlatform,
+} from "@/lib/directory/maps";
 
 /**
  * Referral result cards rendered from a `tool-searchResources` output part.
@@ -82,6 +91,11 @@ function fullHours(hours: DirectoryHours | null): string[] {
  * that decided the ordering.
  */
 function localityLabel(match: DirectoryMatch): string | null {
+	// A real distance beats any coverage phrasing — "2.3 mi away" answers the
+	// question "can I get there?" that "Serves your county" only gestures at.
+	const distance = formatDistance(match.distanceMiles);
+	if (distance) return distance;
+
 	const city = match.address?.city;
 	switch (match.locality) {
 		case "in_city":
@@ -107,8 +121,17 @@ function addressLine(match: DirectoryMatch): string | null {
 	return [street, cityState].filter(Boolean).join(", ") || null;
 }
 
-function mapsUrl(address: string): string {
-	return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+/**
+ * Directions target for a card. Coordinates win when present; otherwise the
+ * formatted address is handed to the maps provider to geocode.
+ */
+function directionsTarget(match: DirectoryMatch): DirectionsTarget {
+	return {
+		latitude: match.latitude,
+		longitude: match.longitude,
+		address: addressLine(match),
+		label: match.siteName || match.programName,
+	};
 }
 
 function formatVerified(iso: string | null): string | null {
@@ -118,21 +141,42 @@ function formatVerified(iso: string | null): string | null {
 	return `Verified ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
 }
 
+/**
+ * Directory free-text arrives as Markdown — iCarol authors enter HTML (bulleted
+ * document lists, links to application forms), which lib/directory/html.ts converts
+ * at sync time. Rendering it as Markdown keeps those links usable without ever
+ * putting untrusted HTML in the DOM.
+ */
 function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div>
 			<span className="font-medium text-neutral-800">{label}</span>{" "}
-			<span className="text-neutral-600">{value}</span>
+			<span className="card-md text-neutral-600">
+				<Streamdown>{value}</Streamdown>
+			</span>
 		</div>
 	);
 }
 
 // ---- Cards ----
 
-function ResourceCard({ match, accentColor }: { match: DirectoryMatch; accentColor: string }) {
+function ResourceCard({
+	match,
+	accentColor,
+	mapsPlatform,
+}: {
+	match: DirectoryMatch;
+	accentColor: string;
+	mapsPlatform: MapsPlatform;
+}) {
 	const [open, setOpen] = useState(false);
-	const phone = match.phones[0];
+	// Defence in depth: sync-time validation already drops non-phone values, but a
+	// row loaded before that fix (or a future iCarol edit) must never produce a
+	// "Call https://facebook.com/…" button. Pick the first ACTUALLY dialable number.
+	const phone = match.phones.find((p) => toTelHref(p.number)) ?? null;
+	const phoneHref = phone ? toTelHref(phone.number) : null;
 	const address = addressLine(match);
+	const directionsHref = directionsUrl(directionsTarget(match), mapsPlatform);
 	const openState = hoursToday(match.hours);
 	const place = localityLabel(match);
 	const hourLines = fullHours(match.hours);
@@ -188,9 +232,9 @@ function ResourceCard({ match, accentColor }: { match: DirectoryMatch; accentCol
 				)}
 
 				<div className="mt-2.5 flex items-center gap-2">
-					{phone ? (
+					{phone && phoneHref ? (
 						<a
-							href={`tel:${phone.number.replace(/[^\d+]/g, "")}`}
+							href={phoneHref}
 							className="rounded-lg px-3 py-2 text-xs font-semibold text-white"
 							style={{ backgroundColor: accentColor }}
 						>
@@ -208,6 +252,22 @@ function ResourceCard({ match, accentColor }: { match: DirectoryMatch; accentCol
 								Visit website
 							</a>
 						)
+					)}
+
+					{/* Opens Apple Maps on iOS and Google Maps everywhere else. target=_blank
+					    so a desktop click lands in a new tab and the chat isn't navigated
+					    away — the widget lives in an iframe, so losing it loses the
+					    conversation. */}
+					{directionsHref && (
+						<a
+							href={directionsHref}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="rounded-lg border px-3 py-2 text-xs font-semibold transition-colors hover:bg-neutral-50"
+							style={{ borderColor: accentColor, color: accentColor }}
+						>
+							Directions
+						</a>
 					)}
 					{hasDetail && (
 						<button
@@ -237,22 +297,14 @@ function ResourceCard({ match, accentColor }: { match: DirectoryMatch; accentCol
 					id={panelId}
 					className="space-y-2 border-t border-neutral-150 bg-neutral-50 px-3 py-2.5 text-xs"
 				>
-					{match.description && <p className="text-neutral-700">{match.description}</p>}
-
-					{address && (
-						<div className="text-neutral-700">
-							{address}
-							<a
-								href={mapsUrl(address)}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="ml-1.5 font-medium underline"
-								style={{ color: accentColor }}
-							>
-								Directions
-							</a>
+					{match.description && (
+						<div className="card-md text-neutral-700">
+							<Streamdown>{match.description}</Streamdown>
 						</div>
 					)}
+
+					{/* Address as plain text — the Directions button above owns navigation now. */}
+					{address && <div className="text-neutral-700">{address}</div>}
 
 					{match.eligibility && <DetailRow label="Who qualifies:" value={match.eligibility} />}
 					{match.requiredDocumentation && (
@@ -265,22 +317,25 @@ function ResourceCard({ match, accentColor }: { match: DirectoryMatch; accentCol
 					{match.languages && <DetailRow label="Languages:" value={match.languages} />}
 					{match.coverageDisplay && <DetailRow label="Area served:" value={match.coverageDisplay} />}
 
-					{match.phones.length > 1 && (
+					{match.phones.filter((p) => p.number !== phone?.number && toTelHref(p.number)).length >
+						0 && (
 						<div>
 							<span className="font-medium text-neutral-800">Other numbers</span>
-							{match.phones.slice(1).map((p) => (
-								<div key={p.number} className="text-neutral-600">
-									{p.label}:{" "}
-									<a
-										className="underline"
-										href={`tel:${p.number.replace(/[^\d+]/g, "")}`}
-										style={{ color: accentColor }}
-									>
-										{p.number}
-									</a>
-									{p.description ? ` — ${p.description}` : ""}
-								</div>
-							))}
+							{match.phones
+								.filter((p) => p.number !== phone?.number && toTelHref(p.number))
+								.map((p) => (
+									<div key={p.number} className="text-neutral-600">
+										{p.label}:{" "}
+										<a
+											className="underline"
+											href={toTelHref(p.number) as string}
+											style={{ color: accentColor }}
+										>
+											{p.number}
+										</a>
+										{p.description ? ` — ${p.description}` : ""}
+									</div>
+								))}
 						</div>
 					)}
 
@@ -358,13 +413,27 @@ export function ResourceCards({
 	onShowMore: () => void;
 	disabled: boolean;
 }) {
+	// Resolved after mount, not during render: navigator is unavailable on the server,
+	// and branching on it during the first client render would desync hydration.
+	// Google Maps is the pre-mount default and works on every platform, so the worst
+	// case is an iOS user who taps within the first frame getting Google instead.
+	const [mapsPlatform, setMapsPlatform] = useState<MapsPlatform>("other");
+	useEffect(() => {
+		setMapsPlatform(currentMapsPlatform());
+	}, []);
+
 	if (result.noGoodMatch) return <Call211Card />;
 	if (result.matches.length === 0) return null;
 
 	return (
 		<div className="mt-2 w-full space-y-2">
 			{result.matches.map((match) => (
-				<ResourceCard key={match.id} match={match} accentColor={accentColor} />
+				<ResourceCard
+					key={match.id}
+					match={match}
+					accentColor={accentColor}
+					mapsPlatform={mapsPlatform}
+				/>
 			))}
 			{result.moreCount > 0 && (
 				<button
