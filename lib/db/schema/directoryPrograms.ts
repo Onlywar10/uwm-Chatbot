@@ -100,10 +100,23 @@ export const directoryPrograms = pgTable(
 		contentHash: varchar("content_hash", { length: 64 }).notNull(),
 		embedding: vector("embedding", { dimensions: 1536 }).notNull(),
 
+		// A SECOND, deliberately narrow embedding over just "what this program is":
+		// name + AIRS taxonomy + a short description snippet.
+		//
+		// The full embeddingText above averages ~700 chars of description, eligibility,
+		// coverage and address. Cosine between a three-word query ("winter coats") and
+		// that blob lands around 0.25 even for a perfect topical match — barely above
+		// where off-topic junk sits (~0.24) — so no similarity threshold could separate
+		// a real need from nonsense. The narrow text restores that separation, and is
+		// what ranking and the honesty gate key off.
+		topicText: text("topic_text"),
+		topicEmbedding: vector("topic_embedding", { dimensions: 1536 }),
+
 		syncedAt: timestamp("synced_at").notNull().default(sql`now()`),
 	},
 	(t) => [
 		index("directory_embedding_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
+		index("directory_topic_embedding_idx").using("hnsw", t.topicEmbedding.op("vector_cosine_ops")),
 		index("directory_service_areas_idx").using("gin", t.serviceAreas),
 		index("directory_program_id_idx").on(t.programId),
 		index("directory_city_idx").on(t.city),

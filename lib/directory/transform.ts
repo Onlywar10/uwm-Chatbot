@@ -210,6 +210,33 @@ function parseVerifiedOn(raw: string | undefined): Date | null {
 	return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Narrow "what this program is" text for the topic embedding.
+ *
+ * Deliberately excludes eligibility, hours, coverage, address and the long tail of
+ * the description. Those make the full embeddingText good for recall on unusual
+ * phrasings but terrible for discrimination: against ~700 chars, a perfect
+ * three-word topical match scores about the same as an unrelated program serving
+ * the same population. Keeping this to name + services + one sentence is what lets
+ * "winter coats" separate from "wedding photographer".
+ */
+export function buildTopicText(params: {
+	programName: string;
+	taxonomy: string[];
+	description: string | null;
+}): string {
+	const firstSentences = params.description
+		? params.description.replace(/\s+/g, " ").trim().slice(0, 220)
+		: null;
+	return [
+		params.programName,
+		params.taxonomy.length ? params.taxonomy.join(", ") : null,
+		firstSentences,
+	]
+		.filter(Boolean)
+		.join(" | ");
+}
+
 function buildEmbeddingText(params: {
 	programName: string;
 	agencyName: string | null;
