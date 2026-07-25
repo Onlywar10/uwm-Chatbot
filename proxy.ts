@@ -4,12 +4,17 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // embedded chat widget + its API, the QStash crawl webhook, the headless-render
 // endpoint (guarded by RENDERER_AUTH_TOKEN), and the hourly crawl cron (guarded
 // by CRON_SECRET).
+// NOTE: match ALL of /api/cron, not individual cron routes. Enumerating them meant a
+// newly added cron (/api/cron/directory-sync) was silently intercepted by Clerk before
+// its own CRON_SECRET check could run, so the Vercel cron never executed. Each cron
+// route authenticates itself with a bearer token and fails closed when the secret is
+// unset — that is the real guard; this entry only lets the request reach it.
 const isPublicRoute = createRouteMatcher([
 	"/sign-in(.*)",
 	"/api/chat(.*)",
 	"/api/crawl(.*)",
 	"/api/render(.*)",
-	"/api/cron/crawl(.*)",
+	"/api/cron(.*)",
 	"/widget(.*)",
 ]);
 
