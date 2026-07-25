@@ -2,6 +2,10 @@ import { findRelevantContentForDomain, findRelevantContentForDomains } from "@/l
 import { getWidget } from "@/lib/actions/widgetConfigs";
 import { countTokens, calculateCost } from "@/lib/ai/tokens";
 import { addTurn } from "@/lib/actions/dev";
+import { checkInputShape } from "@/lib/ai/inputShape";
+import { env } from "@/lib/env.mjs";
+import { checkRateLimit } from "@vercel/firewall";
+import { checkBotId } from "botid/server";
 import { CRISIS_TURN_CONTEXT, detectCrisis } from "@/lib/directory/crisis";
 import { REFERRAL_PROMPT_SECTION } from "@/lib/directory/prompt";
 import { createDirectoryTools, type DirectoryToolLog } from "@/lib/directory/tools";
@@ -30,6 +34,34 @@ const composerModel = "openai/gpt-5";
 const TOP_K = 8;
 
 const ALLOWED_ORIGINS = new Set(["https://www.unitedwaymerced.org", "https://www.211merced.org"]);
+
+// Small JSON error helper for the early abuse-protection returns below.
+function jsonError(status: number, message: string): Response {
+	return new Response(JSON.stringify({ error: message }), {
+		status,
+		headers: { "content-type": "application/json" },
+	});
+}
+
+// The widget runs in an iframe served by THIS app (public/widget.js points the
+// iframe at `${origin}/widget/<id>`), so a legitimate chat POST always carries this
+// app's own Origin — or one of the embedding sites in ALLOWED_ORIGINS, which are
+// also permitted to call the endpoint cross-origin via CORS. A present but foreign
+// Origin is a cross-site caller and is rejected. Absent Origins (non-browser
+// callers) are left to the rate limit and per-widget token.
+function originAllowed(req: Request): boolean {
+	const origin = req.headers.get("origin");
+	if (!origin) return true;
+	if (ALLOWED_ORIGINS.has(origin)) return true;
+	const allowed = new Set<string>();
+	try {
+		allowed.add(new URL(req.url).origin);
+	} catch {}
+	try {
+		allowed.add(new URL(env.APP_URL).origin);
+	} catch {}
+	return allowed.has(origin);
+}
 
 function getCorsHeaders(req: Request): Record<string, string> {
 	const origin = req.headers.get("origin") ?? "";
@@ -101,17 +133,52 @@ const MAX_MESSAGE_LENGTH = 2000;
 
 export async function POST(req: Request) {
 	const startTotal = performance.now();
-	const { messages, widgetId }: { messages: UIMessage[]; widgetId?: string } = await req.json();
+
+	// Abuse protection for this public, unauthenticated endpoint. A per-IP rate limit
+	// (Vercel WAF rule "chat-turn") gates volume before any paid LLM/embedding work; the
+	// SDK no-ops until that rule is configured, so it never blocks local development.
+	// Fail open on any SDK/config error so a limiter outage can't take down chat.
+	const rateLimited = await checkRateLimit("chat-turn", { request: req })
+		.then((r) => r.rateLimited)
+		.catch(() => false);
+	if (rateLimited) {
+		return jsonError(429, "Too many requests. Please slow down and try again shortly.");
+	}
+	if (!originAllowed(req)) {
+		return jsonError(403, "Forbidden");
+	}
+
+	const {
+		messages,
+		widgetId,
+		widgetToken,
+	}: { messages: UIMessage[]; widgetId?: string; widgetToken?: string } = await req.json();
 
 	if (!Array.isArray(messages) || messages.length === 0) {
 		return new Response("Invalid messages", { status: 400 });
 	}
+
+	// Bot protection for the public widget: reject automated/scripted clients before any
+	// work. The widget carries the BotID proof (from initBotId in instrumentation-client).
+	// Fail open on any BotID error so an outage can't take down chat; local dev bypasses
+	// to HUMAN.
+	const isBot = await checkBotId()
+		.then((v) => v.isBot)
+		.catch(() => false);
+	if (isBot) return jsonError(403, "Forbidden");
 
 	const trimmedMessages = messages.slice(-MAX_MESSAGES);
 
 	const lastUserText = getLastUserText(trimmedMessages);
 	if (lastUserText.length > MAX_MESSAGE_LENGTH) {
 		return new Response("Message too long", { status: 400 });
+	}
+
+	// Structural prefilter: empty, over-length, link-spam, or repetitive junk is
+	// rejected with no network call at all, so a garbage turn spends nothing.
+	const inputIssue = checkInputShape(lastUserText);
+	if (inputIssue) {
+		return jsonError(400, "Sorry, I can't process that message. Please rephrase your question.");
 	}
 
 	let domain: string;
@@ -122,6 +189,13 @@ export async function POST(req: Request) {
 		const widget = await getWidget(widgetId);
 		if (!widget || !widget.enabled) {
 			return new Response("Widget not found or disabled", { status: 404 });
+		}
+		// Per-widget token rendered by the widget page and echoed back here, so a
+		// leaked or guessed widget id alone can't drive the bot. Not a secret (it
+		// ships to the browser) — it's a revocable handle: rotate the row to cut off
+		// an abused embed instead of taking the endpoint down.
+		if (widgetToken !== widget.widgetToken) {
+			return jsonError(403, "Forbidden");
 		}
 		widgetDomains = widget.domains;
 		domain = `widget:${widgetId}`;

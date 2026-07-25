@@ -19,6 +19,15 @@ export const widgetConfigs = pgTable("widget_configs", {
 
 	enabled: boolean("enabled").notNull().default(true),
 
+	// Per-widget token the public widget page renders and its client echoes back on
+	// every POST /api/chat. Not a secret (it ships to the browser) and not an auth
+	// mechanism — it exists so a guessed or scraped widget id alone can't be used to
+	// drive the bot from a script, and so a widget being abused can be cut off by
+	// rotating one row instead of taking the endpoint down.
+	widgetToken: varchar("widget_token", { length: 64 })
+		.notNull()
+		.$defaultFn(() => nanoid(32)),
+
 	// Opt-in 211 resource referral mode (lib/directory/ tools + intake prompt).
 	// Off by default so school-district tenants never see social-service intake.
 	enableResourceSearch: boolean("enable_resource_search").notNull().default(false),

@@ -20,6 +20,7 @@ type WidgetConfig = {
 	greeting: string | null;
 	suggestedQuestions: string[];
 	accentColor: string | null;
+	widgetToken: string;
 };
 
 function getTextFromMessage(message: UIMessage): string {
@@ -70,7 +71,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 		const text = raw.trim();
 		if (!text || isAwaitingResponse) return;
 
-		sendMessage({ text }, { body: { widgetId: widget.id } });
+		sendMessage({ text }, { body: { widgetId: widget.id, widgetToken: widget.widgetToken } });
 		setInput("");
 	};
 

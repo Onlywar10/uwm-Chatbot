@@ -19,6 +19,9 @@ export default async function WidgetPage({ params }: { params: Promise<{ id: str
 				greeting: widget.greeting,
 				suggestedQuestions: widget.suggestedQuestions,
 				accentColor: widget.accentColor,
+				// Echoed back on every chat POST so a guessed widget id alone can't
+				// drive the bot. Public by design — see widget_configs.widget_token.
+				widgetToken: widget.widgetToken,
 			}}
 		/>
 	);

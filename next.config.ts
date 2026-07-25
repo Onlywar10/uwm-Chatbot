@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withBotId } from "botid/next/config";
 
 const ALLOWED_ORIGINS = [
 	"https://www.unitedwaymerced.org",
@@ -47,4 +48,7 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default nextConfig;
+// withBotId adds the first-party proxy rewrites BotID needs so its challenge script is
+// served from this domain (dodging ad blockers). The client proof is attached in
+// instrumentation-client.ts; POST /api/chat verifies it server-side.
+export default withBotId(nextConfig);
