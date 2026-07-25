@@ -18,7 +18,7 @@ export async function renderHtml(url: string): Promise<string> {
 		cache: "no-store",
 		headers: {
 			"content-type": "application/json",
-			...(env.RENDERER_AUTH_TOKEN ? { "x-renderer-token": env.RENDERER_AUTH_TOKEN } : {}),
+			"x-renderer-token": env.RENDERER_AUTH_TOKEN,
 			// Bypass Vercel Deployment Protection on preview deployments, the same
 			// way publishCrawlJob reaches /api/crawl. Without this the crawler's
 			// internal call to /api/render is rejected with 401 before it runs.
@@ -29,8 +29,14 @@ export async function renderHtml(url: string): Promise<string> {
 		body: JSON.stringify({ url }),
 	});
 
-	if (!response.ok) {
-		throw new Error(`Renderer returned HTTP ${response.status} for ${url}`);
+	// The renderer signals a handled render failure with a 200 + `x-render-outcome:
+	// failed` (not a 5xx — see app/api/render/route.ts), so a flaky page doesn't read
+	// as a server outage. A non-ok status here is therefore a real transport/platform
+	// failure (auth, bad input, function crash). Either way we throw so the caller
+	// falls back to the static fetch.
+	if (!response.ok || response.headers.get("x-render-outcome") === "failed") {
+		const data = (await response.json().catch(() => ({}))) as { error?: string };
+		throw new Error(data.error ?? `Renderer failed with HTTP ${response.status} for ${url}`);
 	}
 
 	const data = (await response.json()) as { html?: string };
