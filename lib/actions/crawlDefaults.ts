@@ -1,3 +1,10 @@
+// Identifies the crawler to the sites it visits. Many WAFs/CDNs block requests
+// with an empty or generic User-Agent, and a well-behaved crawler should be
+// self-identifying and contactable. Sent on every crawl request (static fetches,
+// robots/sitemap probes, and the headless renderer).
+export const CRAWLER_USER_AGENT =
+	"UnitedWayMercedChatbotCrawler/1.0 (+https://www.unitedwaymerced.org)";
+
 export const DEFAULT_CRAWL_OPTIONS = {
 	maxDepth: 2,
 	maxPages: 20,
