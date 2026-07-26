@@ -1,6 +1,6 @@
 "use server";
 
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { chatTurns } from "@/lib/db/schema/chatTurns";
 import type { DevTurn } from "@/lib/types/dev";
@@ -45,30 +45,3 @@ export async function listTurns(limit = 50): Promise<DevTurn[]> {
 	}));
 }
 
-export async function getTurn(id: string): Promise<DevTurn | null> {
-	await requireRole("admin");
-	const rows = await db.select().from(chatTurns).where(eq(chatTurns.id, id)).limit(1);
-
-	if (rows.length === 0) return null;
-
-	const row = rows[0];
-	return {
-		id: row.id,
-		timestamp: row.timestamp,
-		domain: row.domain,
-		status: row.status,
-		latency: row.latency,
-		model: row.model,
-		tokens: row.tokens,
-		estimatedCost: Number.parseFloat(row.estimatedCost),
-		retrieval: row.retrieval,
-		prompt: row.prompt,
-		response: row.response,
-		referral: row.referral,
-	};
-}
-
-export async function clearTurns(): Promise<void> {
-	await requireRole("admin");
-	await db.delete(chatTurns);
-}

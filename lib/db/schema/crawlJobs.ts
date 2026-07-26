@@ -15,7 +15,6 @@ import { sql } from "drizzle-orm";
 import { crawlSettings } from "./crawlSettings";
 import { resources } from "./resources";
 import { crawlRuns } from "./crawlRuns";
-import type { Metadata } from "@/lib/types/crawl";
 
 export const crawlJobStatusEnum = pgEnum("crawl_job_status", ["pending", "success", "failure"]);
 
@@ -50,7 +49,6 @@ export const crawlJobs = pgTable(
 
 		settingsSnapshot: jsonb("settings_snapshot").$type<CrawlSettings>(),
 		contentSnapshot: text("content_snapshot"),
-		metadataSnapshot: jsonb("metadata_snapshot").$type<Metadata>(),
 
 		createdAt: timestamp("created_at").notNull().default(sql`now()`),
 

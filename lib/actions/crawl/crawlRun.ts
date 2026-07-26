@@ -2,9 +2,8 @@
 
 import { db } from "../../db";
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { crawlRuns } from "@/lib/db/schema/crawlRuns";
-import { crawlJobs } from "@/lib/db/schema/crawlJobs";
 import { log } from "../logger";
 import { requireAuth } from "@/lib/auth/guards";
 import type { RobotsRules } from "@/lib/types/crawl";
@@ -122,30 +121,4 @@ export async function cancelCrawl(crawlSettingId: string) {
 
 		return { ok: false as const, error: errorMsg };
 	}
-}
-
-export async function getActiveCrawlRun(entityId: string) {
-	const [run] = await db
-		.select({ id: crawlRuns.id })
-		.from(crawlRuns)
-		.innerJoin(crawlJobs, eq(crawlJobs.crawlRunId, crawlRuns.id))
-		.where(and(eq(crawlRuns.entityId, entityId), eq(crawlJobs.status, "pending")))
-		.limit(1);
-
-	return run;
-}
-
-export async function getCrawlRunStatus(id: string) {
-	const [pendingJobs] = await db
-		.select({
-			pagesCrawled: crawlRuns.pagesCrawled,
-			pagesDiscovered: sql<number>`cast(count(${crawlJobs.id}) as integer)`,
-			status: crawlRuns.status,
-		})
-		.from(crawlRuns)
-		.leftJoin(crawlJobs, eq(crawlJobs.crawlRunId, crawlRuns.id))
-		.where(eq(crawlRuns.id, id))
-		.groupBy(crawlRuns.id, crawlRuns.pagesCrawled, crawlRuns.status);
-
-	return pendingJobs;
 }
