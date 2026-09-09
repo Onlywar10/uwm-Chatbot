@@ -6,13 +6,15 @@ import { widgetConfigs } from "@/lib/db/schema/widgetConfigs";
 // `domains` should match a crawled domain so widget retrieval finds content.
 const DEMO_WIDGET = {
 	id: "uwm-widget-001",
-	name: "UWM Demo Widget",
-	domains: ["www.unitedwaymerced.org", "www.freetaxesmerced.com"],
-	greeting: "Hi! How can I help you today?",
+	name: "United Way of Merced Widget",
+	domains: ["www.unitedwaymerced.org", "www.211merced.org", "www.freetaxesmerced.com"],
+	greeting: "Ask about local resources, free tax help, or what United Way of Merced does.",
+	// One per thing the bot can do: 211 directory search, site Q&A (VITA), about us.
+	// WidgetChat.tsx falls back to the same three when a row has none.
 	suggestedQuestions: [
-		"What is United Way of Merced?",
-		"I need help with my taxes",
-		"How can I help?",
+		"I need help with food, rent, or utilities",
+		"Where can I get my taxes done for free?",
+		"What does United Way of Merced do?",
 	],
 	accentColor: "#003DA5",
 	enabled: true,
