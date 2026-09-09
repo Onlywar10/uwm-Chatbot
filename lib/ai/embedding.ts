@@ -329,10 +329,6 @@ async function findRelevantContentBase(params: {
 	return finalCandidates.slice(0, TOP_K);
 }
 
-export async function findRelevantContent(userQuery: string) {
-	return findRelevantContentBase({ userQuery });
-}
-
 export async function findRelevantContentForDomain(domain: string, userQuery: string) {
 	return findRelevantContentBase({ domain, userQuery });
 }

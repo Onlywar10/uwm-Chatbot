@@ -4,7 +4,6 @@ import { crawlSettings } from "../../db/schema/crawlSettings";
 import { db } from "../../db";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { getDomain } from "@/lib/ai/url";
 
 const upsertCrawlSettingsInputSchema = z.object({
 	domain: z.string().min(1),
@@ -60,13 +59,6 @@ export const upsertCrawlSettings = async (input: unknown) => {
 		};
 	}
 };
-
-export async function updateCrawlSettingsDomain(id: string, url: string) {
-	await db
-		.update(crawlSettings)
-		.set({ domain: getDomain(url) })
-		.where(eq(crawlSettings.entityId, id));
-}
 
 export async function getCrawlSettings(id: string) {
 	const [settings] = await db.select().from(crawlSettings).where(eq(crawlSettings.id, id));

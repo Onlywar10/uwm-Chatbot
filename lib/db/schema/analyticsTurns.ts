@@ -44,7 +44,6 @@ export const analyticsTurns = pgTable(
 		response: text("response").notNull(),
 
 		toolCalls: jsonb("tool_calls").$type<ToolCallLog[]>().notNull(),
-		coverageFlags: jsonb("coverage_flags").$type<string[]>(),
 
 		model: varchar("model", { length: 100 }).notNull(),
 		latencyMs: integer("latency_ms").notNull(),

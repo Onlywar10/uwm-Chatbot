@@ -1,11 +1,11 @@
 "use client";
 
 import { FeedbackButtons } from "@/components/FeedbackButtons";
-import { LoadingIcon } from "@/components/icons";
 import { Sources } from "@/components/Sources";
 import type { DirectorySearchResult } from "@/lib/directory/search";
 import type { ChatSource } from "@/lib/types/chat";
 import { type UIMessage, useChat } from "@ai-sdk/react";
+import { ArrowUp, MapPin } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -24,6 +24,17 @@ type WidgetConfig = {
 	widgetToken: string;
 	enableResourceSearch: boolean;
 };
+
+/**
+ * Sample questions shown on the welcome screen when the widget row has none
+ * configured. One per thing the bot can actually do: search the 211 directory,
+ * answer from the crawled sites (free tax help), and explain the organisation.
+ */
+const DEFAULT_SUGGESTIONS = [
+	"I need help with food, rent, or utilities",
+	"Where can I get my taxes done for free?",
+	"What does United Way of Merced do?",
+];
 
 function getTextFromMessage(message: UIMessage): string {
 	return message.parts
@@ -51,6 +62,18 @@ function getSearchPart(message: UIMessage): SearchToolPart | null {
 	return (parts[parts.length - 1] as unknown as SearchToolPart | undefined) ?? null;
 }
 
+function TypingBubble({ label }: { label: string }) {
+	return (
+		<div className="wc-rise flex justify-start">
+			<output aria-label={label} className="wc-bubble-bot flex items-center gap-1.5 px-3.5 py-3">
+				<span className="wc-dot" />
+				<span className="wc-dot" />
+				<span className="wc-dot" />
+			</output>
+		</div>
+	);
+}
+
 export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 	const { messages, status, sendMessage } = useChat({
 		onError: () => {
@@ -60,6 +83,7 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 
 	const [input, setInput] = useState("");
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	/**
 	 * Shared location, held in memory for this conversation only.
@@ -130,6 +154,15 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 			},
 		);
 		setInput("");
+	};
+
+	/**
+	 * A sample question fills the box rather than sending straight away, so the
+	 * visitor can add their city or a detail ("...in Atwater") before it goes.
+	 */
+	const fillWithSuggestion = (question: string) => {
+		setInput(question);
+		inputRef.current?.focus();
 	};
 
 	const requestLocation = () => {
@@ -209,129 +242,126 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 
 	// United Way of Merced brand blue (overridable per widget config).
 	const accentColor = widget.accentColor || "#003DA5";
+	const suggestions =
+		widget.suggestedQuestions.length > 0 ? widget.suggestedQuestions : DEFAULT_SUGGESTIONS;
+	const canSend = input.trim().length >= 3 && !isAwaitingResponse;
 
 	return (
-		<div className="flex flex-col h-full bg-white">
-			<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-				{widget.greeting && messages.length === 0 && (
-					<div className="flex justify-start">
-						<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
-							{widget.greeting}
+		<div
+			className="wc-root flex h-full flex-col"
+			style={{ "--wc-accent": accentColor } as React.CSSProperties}
+		>
+			<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-3">
+				{messages.length === 0 ? (
+					<div className="flex min-h-full flex-col justify-end gap-5">
+						{/* Welcome */}
+						<div className="wc-rise">
+							<h1 className="text-[21px] font-bold leading-tight tracking-[-0.02em] text-[var(--wc-ink)]">
+								Hi there, how can we help?
+							</h1>
+							<p className="mt-1.5 max-w-[34ch] text-[14px] leading-relaxed text-[var(--wc-ink-2)]">
+								{widget.greeting ||
+									"Ask about local resources, free tax help, or what United Way of Merced does."}
+							</p>
+						</div>
+
+						{/* Sample questions: tap one to fill the box below. */}
+						<div className="wc-rise wc-rise-1">
+							<div className="mb-1.5 px-0.5 text-[12px] font-medium text-[var(--wc-ink-2)]">
+								Try asking
+							</div>
+							<ul className="wc-suggest-list">
+								{suggestions.map((question) => (
+									<li key={question}>
+										<button
+											type="button"
+											onClick={() => fillWithSuggestion(question)}
+											disabled={isAwaitingResponse}
+											className="wc-suggest"
+										>
+											{question}
+										</button>
+									</li>
+								))}
+							</ul>
 						</div>
 					</div>
-				)}
+				) : (
+					<div className="space-y-3">
+						{messages.map((message, index) => {
+							// Cards are held back until the reply has finished streaming. The
+							// tool resolves early in the turn, so rendering on tool completion
+							// dropped three cards in while the model was still explaining them —
+							// the user read an explanation for options that had already
+							// appeared above it.
+							const isStreamingThisMessage =
+								index === messages.length - 1 && (status === "streaming" || status === "submitted");
 
-				{messages.length === 0 && widget.suggestedQuestions.length > 0 && (
-					<div className="flex flex-col items-start gap-2">
-						{widget.suggestedQuestions.map((question) => (
-							<button
-								key={question}
-								type="button"
-								onClick={() => submitText(question)}
-								disabled={isAwaitingResponse}
-								className="rounded-full border px-3 py-1.5 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-								style={{ borderColor: accentColor, color: accentColor }}
-							>
-								{question}
-							</button>
-						))}
-					</div>
-				)}
-
-				{messages.map((message, index) => {
-					// Cards are held back until the reply has finished streaming. The tool
-					// resolves early in the turn, so rendering on tool completion dropped
-					// three cards in while the model was still explaining them — the user
-					// read an explanation for options that had already appeared above it.
-					const isStreamingThisMessage =
-						index === messages.length - 1 &&
-						(status === "streaming" || status === "submitted");
-
-					if (message.role === "user") {
-						return (
-							<div key={message.id} className="flex justify-end">
-								<div
-									className="rounded-lg rounded-tr-none px-3 py-2 max-w-[85%] text-sm text-white"
-									style={{ backgroundColor: accentColor }}
-								>
-									{getTextFromMessage(message)}
-								</div>
-							</div>
-						);
-					}
-
-					const text = getTextFromMessage(message);
-					const meta = message.metadata as MessageMeta | undefined;
-					const searchPart = getSearchPart(message);
-					const searchResult =
-						searchPart?.state === "output-available" &&
-						searchPart.output &&
-						!("error" in searchPart.output)
-							? searchPart.output
-							: null;
-					const searchPending =
-						searchPart != null &&
-						searchPart.state !== "output-available" &&
-						searchPart.state !== "output-error";
-
-					if (!text && !meta?.crisis && !searchPart) {
-						// Assistant message exists (sources/metadata may have arrived) but no
-						// text has streamed yet — keep showing a loading indicator instead of
-						// an empty bubble, right up until the first text token renders.
-						return (
-							<div key={message.id} className="flex justify-start">
-								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 text-sm text-neutral-500">
-									<div className="flex items-center gap-2">
-										<div className="animate-spin text-neutral-400">
-											<LoadingIcon />
+							if (message.role === "user") {
+								return (
+									<div key={message.id} className="wc-rise flex justify-end">
+										<div className="wc-bubble-user max-w-[85%] px-3.5 py-2.5 text-[14px] leading-relaxed">
+											{getTextFromMessage(message)}
 										</div>
-										<span>Generating...</span>
 									</div>
-								</div>
-							</div>
-						);
-					}
+								);
+							}
 
-					return (
-						<div key={message.id} className="flex flex-col items-start">
-							{meta?.crisis && <CrisisCard />}
-							{text && (
-								<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 max-w-[85%] text-sm text-neutral-800">
-									<div className="chat-md text-sm text-neutral-800 leading-relaxed">
-										<Streamdown>{text}</Streamdown>
-									</div>
-								</div>
-							)}
-							{/* Skeleton covers both the tool running AND the reply streaming, so
-							    the space is reserved and the cards don't shift the text when
-							    they land. */}
-							{(searchPending || (searchResult && isStreamingThisMessage)) && (
-								<ResourceCardsSkeleton />
-							)}
-							{searchResult && !isStreamingThisMessage && (
-								<ResourceCards
-									result={searchResult}
-									accentColor={accentColor}
-									onShowMore={() => submitText("Show me more options")}
-									disabled={isAwaitingResponse}
-								/>
-							)}
-							<Sources sources={meta?.sources ?? []} />
-							{meta?.turnId && <FeedbackButtons key={meta.turnId} turnId={meta.turnId} />}
-						</div>
-					);
-				})}
+							const text = getTextFromMessage(message);
+							const meta = message.metadata as MessageMeta | undefined;
+							const searchPart = getSearchPart(message);
+							const searchResult =
+								searchPart?.state === "output-available" &&
+								searchPart.output &&
+								!("error" in searchPart.output)
+									? searchPart.output
+									: null;
+							const searchPending =
+								searchPart != null &&
+								searchPart.state !== "output-available" &&
+								searchPart.state !== "output-error";
 
-				{isAwaitingResponse && messages[messages.length - 1]?.role === "user" && (
-					<div className="flex justify-start">
-						<div className="bg-neutral-100 rounded-lg rounded-tl-none px-3 py-2 text-sm text-neutral-500">
-							<div className="flex items-center gap-2">
-								<div className="animate-spin text-neutral-400">
-									<LoadingIcon />
+							if (!text && !meta?.crisis && !searchPart) {
+								// Assistant message exists (sources/metadata may have arrived)
+								// but no text has streamed yet — keep showing the typing
+								// indicator instead of an empty bubble, right up until the
+								// first text token renders.
+								return <TypingBubble key={message.id} label="Generating reply" />;
+							}
+
+							return (
+								<div key={message.id} className="wc-rise flex flex-col items-start">
+									{meta?.crisis && <CrisisCard />}
+									{text && (
+										<div className="wc-bubble-bot max-w-[88%] px-3.5 py-2.5">
+											<div className="chat-md text-[14px] leading-relaxed">
+												<Streamdown>{text}</Streamdown>
+											</div>
+										</div>
+									)}
+									{/* Skeleton covers both the tool running AND the reply
+									    streaming, so the space is reserved and the cards don't
+									    shift the text when they land. */}
+									{(searchPending || (searchResult && isStreamingThisMessage)) && (
+										<ResourceCardsSkeleton />
+									)}
+									{searchResult && !isStreamingThisMessage && (
+										<ResourceCards
+											result={searchResult}
+											accentColor={accentColor}
+											onShowMore={() => submitText("Show me more options")}
+											disabled={isAwaitingResponse}
+										/>
+									)}
+									<Sources sources={meta?.sources ?? []} />
+									{meta?.turnId && <FeedbackButtons key={meta.turnId} turnId={meta.turnId} />}
 								</div>
-								<span>Thinking...</span>
-							</div>
-						</div>
+							);
+						})}
+
+						{isAwaitingResponse && messages[messages.length - 1]?.role === "user" && (
+							<TypingBubble label="Thinking" />
+						)}
 					</div>
 				)}
 			</div>
@@ -341,15 +371,16 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 			    for the directory — asking someone for their location before they've
 			    asked for help reads as surveillance, not service. */}
 			{widget.enableResourceSearch && isSeekingResources && (
-				<div className="border-t border-neutral-200 bg-white px-3 pt-2">
+				<div className="px-3 pt-1">
 					{locationState === "on" ? (
-						<div className="flex items-center gap-2 text-xs text-neutral-600">
-							<span className="font-medium text-emerald-700">● Using your location</span>
-							<span className="text-neutral-400">to show the closest options</span>
+						<div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">
+							<MapPin size={13} aria-hidden />
+							<span className="font-medium">Using your location</span>
+							<span className="text-emerald-700/70">for the closest options</span>
 							<button
 								type="button"
 								onClick={clearLocation}
-								className="ml-auto rounded px-1.5 py-0.5 text-neutral-500 underline hover:bg-neutral-100"
+								className="ml-auto rounded-md px-1.5 py-0.5 font-medium text-emerald-900 underline underline-offset-2 hover:bg-emerald-100"
 							>
 								Stop
 							</button>
@@ -359,9 +390,9 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 							type="button"
 							onClick={requestLocation}
 							disabled={locationState === "asking"}
-							className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-2.5 py-1.5 text-left text-xs text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-60"
+							className="wc-chip"
 						>
-							<span aria-hidden>📍</span>
+							<MapPin size={14} aria-hidden />
 							{locationState === "asking"
 								? "Waiting for permission…"
 								: locationState === "denied"
@@ -372,28 +403,29 @@ export default function WidgetChat({ widget }: { widget: WidgetConfig }) {
 				</div>
 			)}
 
-			<form onSubmit={handleSubmit} className="border-t border-neutral-200 p-3 flex gap-2 bg-white">
-				<input
-					className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
-					style={{ "--tw-ring-color": accentColor } as React.CSSProperties}
-					minLength={3}
-					required
-					value={input}
-					placeholder="Ask a question..."
-					onChange={(e) => setInput(e.target.value)}
-					disabled={isAwaitingResponse}
-				/>
-				<button
-					type="submit"
-					disabled={isAwaitingResponse}
-					className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-					style={{ backgroundColor: accentColor }}
-				>
-					Send
-				</button>
+			<form onSubmit={handleSubmit} className="wc-composer-wrap">
+				<label htmlFor="wc-input" className="sr-only">
+					Your message
+				</label>
+				<div className="wc-composer">
+					<input
+						id="wc-input"
+						ref={inputRef}
+						minLength={3}
+						required
+						value={input}
+						placeholder="Type your question…"
+						onChange={(e) => setInput(e.target.value)}
+						disabled={isAwaitingResponse}
+					/>
+					<button type="submit" disabled={!canSend} className="wc-send">
+						<span>Send</span>
+						<ArrowUp size={15} strokeWidth={2.5} aria-hidden />
+					</button>
+				</div>
 			</form>
 
-			<div className="px-3 pb-2 pt-0 text-center text-[10px] text-neutral-400 bg-white">
+			<div className="px-3 pb-2 pt-1.5 text-center text-[10.5px] text-neutral-500">
 				Powered by United Way of Merced County · 211 Community Resources
 			</div>
 		</div>

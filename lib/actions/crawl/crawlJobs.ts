@@ -331,21 +331,3 @@ async function updatePagesCrawled(id: string) {
 		throw error;
 	}
 }
-
-/**
- * - Looks up the pending recrawl jobs in progress matching a specific crawl setting ID
- * @param crawlSettingId - ID of the crawl settings configuration.
- * @returns An array of objects containing the “url” field for pending recrawl jobs.
- */
-export async function getRecrawlJobs(crawlSettingId: string) {
-	return await db
-		.select({ url: crawlJobs.url })
-		.from(crawlJobs)
-		.where(
-			and(
-				eq(crawlJobs.jobType, "recrawl"),
-				eq(crawlJobs.crawlSettingId, crawlSettingId),
-				eq(crawlJobs.status, "pending"),
-			),
-		);
-}

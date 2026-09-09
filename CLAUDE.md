@@ -72,14 +72,14 @@ The site-RAG prefetch in steps 2–3 runs for **every** tenant, referral-enabled
 
 ### Content Ingestion (`lib/actions/crawl/`)
 - QStash publishes crawl jobs → `POST /api/crawl` webhook processes them
-- Handles HTML (Readability), PDFs (unpdf), Google Docs, Google Drive files
+- Handles HTML (`node-html-parser` + Turndown, `handlers/html.ts`), PDFs (unpdf), Google Docs, Google Drive files
 - JS-heavy pages: crawl settings can enable "Render JavaScript", which calls the headless-Chromium renderer at `POST /api/render` (puppeteer + Sparticuz Chromium, guarded by `RENDERER_AUTH_TOKEN`; needs the 4GB "Performance" function size on Vercel)
 - Parent/child chunking: markdown split into ~2000-char parent chunks (`parent_chunks` table), each re-split into ~700-char children; only children are embedded (`text-embedding-3-small`, 1536 dims) but retrieval returns the parent's full content
 - Embeddings stored with HNSW index, domain-scoped
 - Scheduled recrawls: `crawlSchedule`/`crawlRuns` tables, driven by `GET /api/cron/crawl` (Vercel cron, `CRON_SECRET` bearer auth)
 
 ### Embeddable Widget (`app/widget/[id]/`)
-- Public chat UI served in an iframe, configured per-tenant via the `widget_configs` table (name, domain list, greeting, suggested questions, accent color, enabled flag); managed through server actions in `lib/actions/widgetConfigs.ts`
+- Public chat UI served in an iframe, configured per-tenant via the `widget_configs` table (name, domain list, greeting, suggested questions, accent color, enabled flag). `lib/actions/widgetConfigs.ts` only *reads* (`getWidget`) — there is no create/edit UI, so rows are made by `pnpm db:seed-widget` or by hand
 - A widget aggregates content across all of its configured domains (`findRelevantContentForDomains`); its chat turns are recorded under the pseudo-domain `widget:<id>`
 - `test-widget.html` at the repo root is a local embed harness
 - `enableResourceSearch` (default off) is the per-widget switch for the 211 referral tools below. Prod currently has exactly one widget, `uwm-widget-001`, with it **on**, serving `unitedwaymerced.org`, `211merced.org`, and `freetaxesmerced.com`.

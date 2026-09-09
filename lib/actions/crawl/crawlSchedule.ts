@@ -10,78 +10,11 @@ import { crawlSchedule } from "@/lib/db/schema/crawlSchedule";
 import { startScheduledCrawl } from "./start";
 import { log } from "../logger";
 
-const DEFAULT_INTERVAL = 336;
-
-const createCrawlScheduleSchema = z.object({
-	url: z.string().min(1),
-	entityId: z.string().min(1),
-	crawlSettingId: z.string().min(1),
-	lastCrawlMethod: z.enum(["automatic", "manual"]),
-});
-
 const updateCrawlScheduleStateSchema = z.object({
 	status: z.enum(["success", "failure", "pending"]).optional(),
 	errorMessage: z.string().min(1).optional(),
 	lastCrawlMethod: z.enum(["automatic", "manual"]).optional(),
 });
-
-export async function createCrawlSchedule(input: unknown) {
-	try {
-		const parsed = createCrawlScheduleSchema.parse(input);
-		const nextCrawlAt = new Date(Date.now() + DEFAULT_INTERVAL * 60 * 60 * 1000);
-
-		await db.insert(crawlSchedule).values({
-			url: parsed.url,
-			interval: DEFAULT_INTERVAL,
-			nextCrawlAt,
-			lastCrawlMethod: parsed.lastCrawlMethod,
-			entityId: parsed.entityId,
-			crawlSettingId: parsed.crawlSettingId,
-		});
-
-		return { ok: true as const };
-	} catch (error) {
-		return {
-			ok: false as const,
-			error:
-				error instanceof Error && error.message.length > 0
-					? error.message
-					: "Error, please try again.",
-		};
-	}
-}
-
-export async function updateCrawlSchedule(
-	id: string,
-	lastCrawlAt: Date,
-	interval: {
-		weeks: number;
-		days: number;
-		hours: number;
-	},
-) {
-	try {
-		const newInterval = interval.weeks * 7 * 24 + interval.days * 24 + interval.hours;
-		if (newInterval < 1) throw new Error("Interval must be at least 1 hour.");
-
-		const nextCrawlAt = new Date(new Date(lastCrawlAt).getTime() + newInterval * 60 * 60 * 1000);
-
-		await db
-			.update(crawlSchedule)
-			.set({ interval: newInterval, nextCrawlAt })
-			.where(eq(crawlSchedule.id, id));
-
-		return { ok: true as const };
-	} catch (error) {
-		return {
-			ok: false as const,
-			error:
-				error instanceof Error && error.message.length > 0
-					? error.message
-					: "Error, please try again.",
-		};
-	}
-}
 
 export async function searchAndStartDueCrawls() {
 	await log({ level: "info", source: "scheduler", message: "Checking for due crawl schedules" });

@@ -197,3 +197,243 @@
 		@apply bg-background text-foreground;
 	}
 }
+
+/* ---- Embeddable widget (app/widget/[id]) ----
+   The widget sets --wc-accent per tenant on its root; everything below derives
+   tints from it with color-mix so one DB colour drives the whole surface.
+   Namespaced "wc-" so nothing here leaks into the admin UI. Chrome for the
+   launcher, teaser, and panel header lives in public/widget.js instead. */
+.wc-root {
+	--wc-accent: #003da5;
+	--wc-accent-soft: color-mix(in srgb, var(--wc-accent) 8%, white);
+	--wc-accent-softer: color-mix(in srgb, var(--wc-accent) 4%, white);
+	--wc-accent-line: color-mix(in srgb, var(--wc-accent) 30%, white);
+	--wc-accent-deep: color-mix(in srgb, var(--wc-accent) 78%, black);
+	--wc-ink: #14181f;
+	--wc-ink-2: #4b5563;
+	--wc-line: #e5e7eb;
+	background: #f6f8fb;
+	scrollbar-color: color-mix(in srgb, var(--wc-accent) 30%, white) transparent;
+	scrollbar-width: thin;
+	caret-color: var(--wc-accent);
+}
+.wc-root ::selection {
+	background: color-mix(in srgb, var(--wc-accent) 22%, white);
+	color: var(--wc-ink);
+}
+.wc-root ::-webkit-scrollbar {
+	width: 8px;
+}
+.wc-root ::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--wc-accent) 26%, white);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+.wc-root ::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* Entrance for a new message (or the welcome screen). One authored moment,
+   ease-out from nearly-visible, so the chat feels alive without jitter. */
+@keyframes wc-rise {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.wc-rise {
+	animation: wc-rise 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wc-rise-1 {
+	animation-delay: 0.08s;
+}
+
+/* Typing indicator: three dots breathing in sequence. */
+@keyframes wc-dot {
+	0%,
+	60%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.35;
+	}
+	30% {
+		transform: translateY(-4px);
+		opacity: 1;
+	}
+}
+.wc-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+	background: var(--wc-accent);
+	animation: wc-dot 1.2s ease-in-out infinite;
+}
+.wc-dot:nth-child(2) {
+	animation-delay: 0.15s;
+}
+.wc-dot:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+/* Sample questions: one bordered list, rows divided by hairlines. Tapping a
+   row fills the composer rather than sending. */
+.wc-suggest-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	background: #fff;
+	border: 1px solid var(--wc-line);
+	border-radius: 12px;
+	overflow: hidden;
+}
+.wc-suggest-list > li + li {
+	border-top: 1px solid var(--wc-line);
+}
+.wc-suggest {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 10px 12px;
+	background: transparent;
+	border: none;
+	color: var(--wc-accent);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.35;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+.wc-suggest:hover:not(:disabled) {
+	background: var(--wc-accent-softer);
+}
+.wc-suggest:focus-visible {
+	outline: none;
+	background: var(--wc-accent-soft);
+	box-shadow: inset 3px 0 0 var(--wc-accent);
+}
+.wc-suggest:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* Composer: a bordered box with the input on the left and a labelled Send
+   button on the right. */
+.wc-composer-wrap {
+	padding: 8px 12px 0;
+}
+.wc-composer {
+	display: flex;
+	align-items: stretch;
+	background: #fff;
+	border: 1px solid #d1d5db;
+	border-radius: 12px;
+	overflow: hidden;
+	transition:
+		border-color 0.15s ease,
+		box-shadow 0.15s ease;
+}
+.wc-composer:focus-within {
+	border-color: var(--wc-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc-accent) 15%, transparent);
+}
+.wc-composer input {
+	flex: 1 1 auto;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	outline: none;
+	font-size: 14px;
+	color: var(--wc-ink);
+	padding: 11px 12px;
+}
+.wc-composer input::placeholder {
+	color: #6b7280;
+}
+.wc-composer input:disabled {
+	color: #9ca3af;
+}
+.wc-send {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 4px;
+	padding: 0 12px;
+	border-radius: 8px;
+	color: #fff;
+	background: var(--wc-accent);
+	border: none;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		opacity 0.15s ease;
+}
+.wc-send:hover:not(:disabled) {
+	background: var(--wc-accent-deep);
+}
+.wc-send:focus-visible {
+	outline: 2px solid var(--wc-accent);
+	outline-offset: 2px;
+}
+.wc-send:disabled {
+	background: #d1d5db;
+	cursor: not-allowed;
+}
+
+/* Message bubbles. */
+.wc-bubble-user {
+	background: var(--wc-accent);
+	color: #fff;
+	border-radius: 16px 16px 4px 16px;
+}
+.wc-bubble-bot {
+	background: #fff;
+	color: var(--wc-ink);
+	border: 1px solid var(--wc-line);
+	border-radius: 4px 16px 16px 16px;
+}
+.wc-root .chat-md a {
+	color: var(--wc-accent);
+}
+
+/* Secondary actions (location sharing). */
+.wc-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 1px dashed var(--wc-accent-line);
+	background: #fff;
+	color: var(--wc-accent);
+	font-size: 12px;
+	font-weight: 500;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease;
+}
+.wc-chip:hover:not(:disabled) {
+	background: var(--wc-accent-softer);
+	border-style: solid;
+}
+.wc-chip:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wc-rise,
+	.wc-dot {
+		animation: none;
+	}
+}
